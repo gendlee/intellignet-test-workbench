@@ -1,18 +1,94 @@
-# 中銀香港智能化API測試工作台（前端）
+# 中銀香港智能化API測試工作台（前端 + 後端）
 
 測試人員錄入銀行主機系統（XML 報文）測試案例 → AI 自動生成對應新系統（HTTP/JSON）案例（可人工微調）→ 執行後對兩系統輸出做**欄位級差異比對並高亮**，支持人工審核、批量回歸、壓力測試設計、Dashboard 與 Word 導出。
 
-**零依賴**：HTML5 + 原生 CSS（design tokens）+ 原生 JS（ES Modules），無任何 npm 套件；Node.js ≥ 18 僅作靜態/Mock 伺服器。開箱可演示，可切換真實後端。
+**前端零依賴**：HTML5 + 原生 CSS（design tokens）+ 原生 JS（ES Modules），無任何 npm 套件；Node.js ≥ 18 僅作靜態/Mock 伺服器。開箱可演示，可切換真實後端（`backend/`，Spring Boot 3.3.5）。
 
-## 快速開始
+## 快速開始（開發模式）
 
 ```bash
-node server.js        # 或 npm start
-# 打開 http://localhost:8080
+node server.js        # 或 npm start → http://localhost:8080（靜態 + /api/* Mock）
+```
+
+後端（見下「編譯與部署」）啟動後，建立 `public/env.js` 即可全量切到真實後端：
+
+```bash
+echo 'window.APP_CONFIG = { apiBase: "http://localhost:8081" };' > public/env.js
 ```
 
 - 靜態頁面與 `/api/*` Mock 由同一 Node 進程提供（`PORT=8081 node server.js` 可換埠）
-- `node --test`（或 `npm test`）：diff 引擎回歸測試
+- `node --test`（或 `npm test`）：diff 引擎回歸測試（JS 28 項；Java 端同源單測見後端）
+
+## 編譯與部署
+
+### 前端（純靜態，無編譯）
+
+前端無任何構建步驟，`public/` 即部署產物，拷貝到任意靜態伺服器即可。
+
+**開發 / 演示**：`node server.js`（8080，內建 Mock）。
+
+**生產部署（nginx 示例）**：
+
+```nginx
+server {
+    listen 80;
+    root /opt/workbench/public;          # 前端靜態目錄
+
+    # 錄入頁依賴 /shared/*（XML 解析器），需另指到項目根目錄的 shared/
+    location /shared/ {
+        alias /opt/workbench/shared/;
+    }
+
+    location / {
+        try_files $uri $uri/ /404.html;
+    }
+}
+```
+
+> 若不放 /shared/ 或使用無法配置 alias 的靜態伺服器，改用 `node server.js` 託管亦可（mock 部分不會被前端調用）。
+
+**連接後端**：在 `public/` 放 `env.js`（已被 .gitignore 忽略，含機密地址不提交）：
+
+```js
+window.APP_CONFIG = { apiBase: 'http://<後端主機>:8081' };
+```
+
+11 個 HTML 已統一 `<script src="/env.js">`；不建該文件則請求走同源（Mock 或純靜態 404）。
+
+### 後端（Maven，Java 17+）
+
+環境要求：JDK 17+（JDK 23 已驗證）、Maven 3.8+。詳見 `backend/README.md`。
+
+```bash
+cd backend
+
+# 開發運行（H2 記憶體庫，零安裝；重啟即重置種子）
+mvn spring-boot:run
+
+# 編譯打包 → target/apitest-backend-1.0.0.jar
+mvn clean package
+
+# 部署運行
+java -jar target/apitest-backend-1.0.0.jar
+
+# 連接 MySQL 8 / TDSQL（profile 見 application-mysql.yml）
+java -jar target/apitest-backend-1.0.0.jar --spring.profiles.active=mysql
+```
+
+- 端口 8081（`application.yml` 可改）；CORS 已 allow-all，供前端跨域調用
+- `schema.sql` 隨啟動自動建表（MySQL/H2 通用，JSON 一律 LONGTEXT）
+- 除錯用資料庫瀏覽器：`http://localhost:8081/h2-console`（JDBC URL `jdbc:h2:mem:apitest;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1;NON_KEYWORDS=MONTH`，sa / 空密碼）
+- 測試：`mvn test`（diff 引擎 28 單測）
+
+### 部署拓撲
+
+```
+瀏覽器
+ ├─ http://host:80       前端（nginx / public 靜態）
+ └─ http://host:8081     /api/*（Spring Boot，數據存 H2/MySQL/TDSQL）
+```
+
+前端 `env.js` 的 `apiBase` 即指向後端地址；後端 CORS allow-all，無需代理。若後端不在瀏覽器可直達的網段，可在 nginx 加 `/api/` 反代並將 `apiBase` 留空（同源請求）。
 
 ## 頁面
 
@@ -96,4 +172,6 @@ public/
 
 ## 版本
 
-v1.1.0（示範環境）— Mock 模式 · 零依賴。新增：儀表板模組卡片（需求1）、案例詳情執行過程+配置卡（需求2/10）、業務模組獨立維護（需求3）、對比/HTTP 雙模式 + 報文格式可選（需求4/5）、行式字段編輯器（需求6）、模組下拉（需求7）、壓測詳情抽屜（需求8）、環境變量（需求9）、壓測審批（需求11）。需求對照與實現細節見 `docs/API-LIST.md`。
+v1.2.0（示範環境）— Mock 模式 · 零依賴 + Java 後端（`backend/`，Spring Boot 3.3.5 / MyBatis-Plus 3.5.7 / H2 或 MySQL 8 / TDSQL）。新增：依 `docs/API-LIST.md` 全量實現後端接口（契約與 Mock 逐字對齊）、差異引擎 Java 移植（28 單測）、種子數據移植、前後端一鍵聯動（`public/env.js`）。
+
+v1.1.0 — 儀表板模組卡片（需求1）、案例詳情執行過程+配置卡（需求2/10）、業務模組獨立維護（需求3）、對比/HTTP 雙模式 + 報文格式可選（需求4/5）、行式字段編輯器（需求6）、模組下拉（需求7）、壓測詳情抽屜（需求8）、環境變量（需求9）、壓測審批（需求11）。需求對照與實現細節見 `docs/API-LIST.md`。
