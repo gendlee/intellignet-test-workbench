@@ -58,8 +58,9 @@ export function barChart({ labels, series, colors = CHART_COLORS, width = 420, r
 
 /** 折線圖（多系列） */
 export function lineChart({ labels, series, colors = ['#1a7f37', '#b7791f', '#c0392b'], width = 520, height = 220, yTicks = 4 }) {
+  const renderW = width || 560 // width=0 → 自適應（viewBox 縮放 + svg width:100%）
   const padL = 34, padB = 26, padT = 10, padR = 8
-  const iw = width - padL - padR
+  const iw = renderW - padL - padR
   const ih = height - padT - padB
   const max = Math.max(1, ...series.flatMap((s) => s.data))
   const n = labels.length
@@ -70,7 +71,7 @@ export function lineChart({ labels, series, colors = ['#1a7f37', '#b7791f', '#c0
   for (let t = 0; t <= yTicks; t++) {
     const v = Math.round((max / yTicks) * t)
     const yy = y(v)
-    grid.push(`<line x1="${padL}" y1="${yy}" x2="${width - padR}" y2="${yy}" stroke="#e9ebef" stroke-dasharray="3 4"/>
+    grid.push(`<line x1="${padL}" y1="${yy}" x2="${renderW - padR}" y2="${yy}" stroke="#e9ebef" stroke-dasharray="3 4"/>
       <text x="${padL - 6}" y="${yy + 4}" text-anchor="end" font-size="10" fill="#8a9099">${v}</text>`)
   }
   const lines = series.map((s, si) => {
@@ -93,7 +94,7 @@ export function lineChart({ labels, series, colors = ['#1a7f37', '#b7791f', '#c0
 
   return `
     <div>
-      <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="趨勢圖">
+      <svg width="${width || '100%'}" height="${height}" viewBox="0 0 ${renderW} ${height}" role="img" aria-label="趨勢圖">
         ${grid.join('')}${lines}${dots}${xLabels}
       </svg>
       <div class="stat-legend" style="margin-top:6px">${legend}</div>
