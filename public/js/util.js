@@ -39,7 +39,7 @@ export function verdictBadge(v) {
   const map = {
     PASS: ['badge-ok', '通過'],
     FAIL: ['badge-danger', '失敗'],
-    DIFF: ['badge-warn', '有差異'],
+    DIFF: ['badge-danger', '有差異'],
     RUNNING: ['badge-info', '執行中'],
   }
   const [cls, label] = map[v] || ['badge-neutral', v || '—']

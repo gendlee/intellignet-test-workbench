@@ -359,6 +359,9 @@ table.tbl td.num, table.tbl th.num { text-align: right; font-variant-numeric: ta
   padding: 42px 20px; font-size: 13px;
 }
 .empty .empty-icon { font-size: 30px; margin-bottom: 8px; opacity: 0.5; }
+/* 判定通過空態：綠色凸顯 */
+.empty-ok { color: var(--ok); font-weight: 700; }
+.empty-ok .empty-icon { color: var(--ok); opacity: 0.85; }
 .spinner {
   width: 18px; height: 18px;
   border: 2px solid var(--border-strong);

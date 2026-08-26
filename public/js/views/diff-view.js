@@ -5,18 +5,18 @@
 
 import { el, esc, suspicionBadge, kindLabel, plausibilityLabel, stateTypeLabel, semanticDiff } from '../util.js'
 
-/** 判決橫幅（執行後或回看歷史時展示） */
+/** 判決橫幅（執行後或回看歷史時展示）；通過=綠色，有差異/失敗=紅色（字體凸顯） */
 export function renderVerdictBanner(run, { extraMeta = false } = {}) {
   const v = run.verdict
   const map = {
     PASS: { label: '判定：通過（PASS）', cls: 'ok', desc: '兩側輸出字段級一致，無差異' },
     FAIL: { label: '判定：失敗（FAIL）', cls: 'danger', desc: '存在高可疑差異，需人工復核後方可上線' },
-    DIFF: { label: '判定：有差異（DIFF）', cls: 'warn', desc: '存在低/中可疑差異（含格式性表示差異），建議人工確認是否可接受' },
+    DIFF: { label: '判定：有差異（DIFF）', cls: 'danger', desc: '存在低/中可疑差異（含格式性表示差異），建議人工確認是否可接受' },
   }
   const m = map[v] || { label: v || '—', cls: 'neutral', desc: '' }
-  const banner = el('div', { class: `run-state-banner ${m.cls === 'danger' ? '' : m.cls}` }, [
+  const banner = el('div', { class: `run-state-banner ${m.cls}` }, [
     el('span', { class: 'rs-title', text: m.label }),
-    el('span', { class: 'muted', style: 'flex:1', text: m.desc }),
+    el('span', { class: 'rs-desc', style: 'flex:1', text: m.desc }),
   ])
   if (extraMeta && run.stateNote) {
     banner.append(el('span', { class: 'badge badge-info', text: `前置條件：${run.stateNote}` }))
@@ -71,7 +71,7 @@ export function renderPlausibilityBar(diff) {
 export function renderDiffList(diff) {
   const wrap = el('div', { class: 'diff-list' })
   if (!diff.items.length) {
-    wrap.append(el('div', { class: 'empty' }, [
+    wrap.append(el('div', { class: 'empty empty-ok' }, [
       el('div', { class: 'empty-icon', text: '✓' }),
       el('div', { text: '兩側輸出字段級一致，無差異' }),
     ]))

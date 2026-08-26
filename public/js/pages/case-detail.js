@@ -197,7 +197,7 @@ function renderResultPanel() {
     panel.append(el('div', { class: 'card', style: 'padding:18px' }, [
       el('div', { class: 'flex', style: 'margin-bottom:14px;gap:10px' }, [
         el('span', { innerHTML: verdictBadge(run.verdict) }),
-        el('span', { class: 'rs-title', text: run.verdict === 'PASS' ? '兩側報文一致，執行通過' : run.verdict === 'DIFF' ? '存在差異，請查看字段比對' : '存在高可疑差異，執行失敗' }),
+        el('span', { class: `rs-title v-${run.verdict === 'PASS' ? 'ok' : 'bad'}`, text: run.verdict === 'PASS' ? '兩側報文一致，執行通過' : run.verdict === 'DIFF' ? '存在差異，請查看字段比對' : '存在高可疑差異，執行失敗' }),
       ]),
       el('div', { class: 'meta-grid' }, [
         mg('執行時間', fmtTime(run.startedAt, true)),
@@ -220,7 +220,7 @@ function renderResultPanel() {
     panel.append(el('div', { class: 'card', style: 'padding:18px' }, [
       el('div', { class: 'flex', style: 'margin-bottom:14px;gap:10px' }, [
         el('span', { innerHTML: verdictBadge(run.verdict) }),
-        el('span', { class: 'rs-title', text: run.verdict === 'PASS' ? 'HTTP 2xx，執行通過' : `HTTP 非 2xx，執行失敗` }),
+        el('span', { class: `rs-title v-${run.verdict === 'PASS' ? 'ok' : 'bad'}`, text: run.verdict === 'PASS' ? 'HTTP 2xx，執行通過' : `HTTP 非 2xx，執行失敗` }),
       ]),
       el('div', { class: 'meta-grid' }, [
         mg('執行時間', fmtTime(run.startedAt, true)),

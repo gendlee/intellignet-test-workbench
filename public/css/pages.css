@@ -23,7 +23,15 @@
 .detail-head .dh-txn { font-family: var(--mono); font-size: 13px; color: var(--brand); background: var(--brand-soft); padding: 3px 10px; border-radius: 999px; font-weight: 600; }
 .run-state-banner { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-radius: var(--radius); border: 1px solid var(--border); margin-bottom: 16px; background: var(--surface); }
 .run-state-banner.running { border-color: #bfd3f7; background: var(--info-bg); }
-.run-state-banner .rs-title { font-weight: 700; font-size: 14px; }
+.run-state-banner .rs-title { font-weight: 800; font-size: 15px; }
+.run-state-banner .rs-desc { font-weight: 600; font-size: 13px; }
+/* 判決色：通過=綠，有差異/失敗=紅（字體凸顯） */
+.run-state-banner.ok { border-color: #bfe3c8; background: var(--ok-bg); }
+.run-state-banner.ok .rs-title, .run-state-banner.ok .rs-desc { color: var(--ok); }
+.run-state-banner.danger { border-color: #f2c4c4; background: var(--danger-bg); }
+.run-state-banner.danger .rs-title, .run-state-banner.danger .rs-desc { color: var(--danger); }
+.rs-title.v-ok { color: var(--ok); }
+.rs-title.v-bad { color: var(--danger); }
 
 /* ---------- 錄入頁 ---------- */
 .edit-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: stretch; }
