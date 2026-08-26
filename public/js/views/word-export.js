@@ -10,16 +10,59 @@ import { esc, fmtTime, stateTypeLabel, statusLabel, kindLabel, plausibilityLabel
 const KIND_CLS = { added: '#0b7a3b', deleted: '#b3261e', modified: '#9a6700' }
 const SUSP_CLS = { low: '#1a7f37', medium: '#b7791f', high: '#c0392b' }
 
-/** 單案例導出 */
+/** 單案例導出（單案例報告形式，保留主標題） */
 export function exportCaseWord(c, run) {
-  const html = buildCaseSection(c, run)
+  const html = buildCaseSection(c, run, {})
   downloadWord(html, `${c.txnCode}-${c.name}-測試報告.doc`)
 }
 
-/** 批量導出：多案例分節（分頁符） */
-export function exportCasesWord(cases, runsByCase) {
-  const sections = cases.map((c) => buildCaseSection(c, runsByCase.get(c.id) || null, true))
-  downloadWord(sections.join(''), `批量測試報告-${cases.length}案例-${fmtStamp()}.doc`)
+/**
+ * 批量導出（匯總形式）：一個主標題 + 執行統計 + 案例結果總覽表 + 每案例詳情分節。
+ * 唯一標識為案例編號（id）；交易碼可維護（允許重複）。
+ */
+export function exportCasesWord(cases, runsByCase, { exporter = '' } = {}) {
+  const summary = buildSummarySection(cases, runsByCase, exporter)
+  const sections = cases.map((c, i) => buildCaseSection(c, runsByCase.get(c.id) || null, { pageBreak: i > 0, index: i }))
+  downloadWord(summary + sections.join(''), `批量測試結果匯總-${cases.length}案例-${fmtStamp()}.doc`)
+}
+
+/** 匯總區：主標題 + 執行統計 + 案例結果總覽表 */
+function buildSummarySection(cases, runsByCase, exporter) {
+  const stats = { PASS: 0, FAIL: 0, DIFF: 0, NONE: 0 }
+  const rows = cases.map((c) => {
+    const run = runsByCase.get(c.id) || null
+    const verdict = run ? run.verdict : 'NONE'
+    stats[verdict] = (stats[verdict] || 0) + 1
+    return `
+      <tr>
+        <td style="${cellStyle}">${esc(c.id)}</td>
+        <td style="${cellStyle}"><b>${esc(c.txnCode)}</b></td>
+        <td style="${cellStyle}">${esc(c.name)}</td>
+        <td style="${cellStyle}">${esc(c.module)}</td>
+        <td style="${cellStyle}">${esc(c.type || 'Regular')}</td>
+        <td style="${cellStyle}">${run ? `<b style="color:${verdictColor(run.verdict)}">${verdictLabel(run.verdict)}</b>` : '<span style="color:#999">未執行</span>'}</td>
+        <td style="${cellStyle}">${run ? fmtTime(run.startedAt, true) : '—'}</td>
+        <td style="${cellStyle}">${run ? esc(run.runBy) : '—'}</td>
+      </tr>`
+  }).join('')
+  return `
+    <h1 style="font-size:20pt;color:#B3002D;margin:0 0 4px;text-align:center">中銀香港智能化 API 測試工作台</h1>
+    <h2 style="font-size:16pt;color:#333;margin:0 0 12px;text-align:center">批量測試結果匯總報告</h2>
+    <p style="font-size:9.5pt;color:#999;text-align:center;margin:0 0 14px">導出時間 ${fmtStamp()}${exporter ? ` · 導出人 ${esc(exporter)}` : ''} · 共 ${cases.length} 個案例</p>
+    <p style="font-size:11pt;color:#333;margin:0 0 6px">
+      執行統計：
+      <b style="color:#1a7f37">通過 ${stats.PASS}</b> ·
+      <b style="color:#c0392b">失敗 ${stats.FAIL}</b> ·
+      <b style="color:#b7791f">有差異 ${stats.DIFF}</b> ·
+      <span style="color:#999">未執行 ${stats.NONE}</span>
+    </p>
+    <h3 style="font-size:13pt;color:#333;margin:14px 0 6px">一、案例結果總覽</h3>
+    <table border="1" cellspacing="0" cellpadding="4" style="border-collapse:collapse;font-size:9pt;width:100%">
+      <tr style="background:#f2f2f2">
+        ${['案例編號', '交易碼', '案例名稱', '模組', '類型', '最近判定', '執行時間', '執行人'].map((h) => `<th style="${cellStyle}">${h}</th>`).join('')}
+      </tr>
+      ${rows}
+    </table>`
 }
 
 function fmtStamp() {
@@ -28,13 +71,23 @@ function fmtStamp() {
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`
 }
 
-function buildCaseSection(c, run, pageBreak = false) {
+function buildCaseSection(c, run, { pageBreak = false, index = null } = {}) {
   const rows = []
   rows.push(tr('案例名稱', c.name, '交易碼', c.txnCode))
-  rows.push(tr('業務模組', c.module, '接口類型', stateTypeLabel[c.stateType] || c.stateType))
-  rows.push(tr('審核狀態', statusLabel[c.status] || c.status, '建立人', c.createdBy))
-  rows.push(tr('建立時間', fmtTime(c.createdAt), '更新時間', fmtTime(c.updatedAt)))
+  rows.push(tr('案例編號', c.id, '業務模組', c.module))
+  rows.push(tr('接口類型', stateTypeLabel[c.stateType] || c.stateType, '審核狀態', statusLabel[c.status] || c.status))
+  rows.push(tr('建立人', c.createdBy, '建立時間', fmtTime(c.createdAt)))
   if (c.precondition) rows.push(tr('前置條件', c.precondition, '', ''))
+
+  // 匯總模式（index 不為 null）：副標題 + h4 章節；單案例模式：主標題 + 數字章節
+  const head = index == null
+    ? `<h2 style="font-size:16pt;color:#B3002D;margin:0 0 4px">中銀香港智能化 API 測試工作台 — 測試報告</h2>
+       <p style="font-size:9pt;color:#999;margin:0 0 12px">${esc(c.txnCode)} · 生成時間 ${fmtStamp()}</p>`
+    : `<h3 style="font-size:14pt;color:#B3002D;margin:0 0 2px">案例 ${index + 1}：${esc(c.txnCode)} — ${esc(c.name)}</h3>
+       <p style="font-size:9pt;color:#999;margin:0 0 10px">案例編號 ${esc(c.id)} · 生成時間 ${fmtStamp()}</p>`
+  const hSec = (title, num) => index == null
+    ? `<h3 style="font-size:13pt;color:#333;margin:12px 0 6px">${num}、${title}</h3>`
+    : `<h4 style="font-size:12pt;color:#333;margin:12px 0 5px">${title}</h4>`
 
   let diffHtml = ''
   let verdictHtml = ''
@@ -61,7 +114,7 @@ function buildCaseSection(c, run, pageBreak = false) {
           <td style="${cellStyle}">${esc(i.reason)}</td>
         </tr>`).join('')
       diffHtml = `
-        <h3 style="font-size:13pt;color:#333;margin:18px 0 6px">三、字段級差異清單</h3>
+        ${hSec('字段級差異清單', '三')}
         <table border="1" cellspacing="0" cellpadding="4" style="border-collapse:collapse;font-size:9pt;width:100%">
           <tr style="background:#f2f2f2">
             ${['字段路徑', '類型', '主機（XML）', '微服務系統（JSON）', '類別', '可疑度', '機器理由'].map((h) => `<th style="${cellStyle}">${h}</th>`).join('')}
@@ -75,7 +128,7 @@ function buildCaseSection(c, run, pageBreak = false) {
 
   const auditHtml = (c.auditLogs || []).length
     ? `
-      <h3 style="font-size:13pt;color:#333;margin:18px 0 6px">四、審核記錄</h3>
+      ${hSec('審核記錄', '四')}
       <table border="1" cellspacing="0" cellpadding="4" style="border-collapse:collapse;font-size:9pt;width:100%">
         <tr style="background:#f2f2f2">${['時間', '操作', '狀態變化', '執行人', '意見'].map((h) => `<th style="${cellStyle}">${h}</th>`).join('')}</tr>
         ${(c.auditLogs || []).map((l) => `
@@ -91,13 +144,12 @@ function buildCaseSection(c, run, pageBreak = false) {
 
   return `
     <div style="${pageBreak ? 'page-break-before:always;' : ''}">
-      <h2 style="font-size:16pt;color:#B3002D;margin:0 0 4px">中銀香港智能化 API 測試工作台 — 測試報告</h2>
-      <p style="font-size:9pt;color:#999;margin:0 0 12px">${c.txnCode} · 生成時間 ${fmtStamp()}</p>
-      <h3 style="font-size:13pt;color:#333;margin:12px 0 6px">一、案例信息</h3>
+      ${head}
+      ${hSec('案例信息', '一')}
       <table border="1" cellspacing="0" cellpadding="4" style="border-collapse:collapse;font-size:9.5pt;width:100%">
         ${rows.join('')}
       </table>
-      <h3 style="font-size:13pt;color:#333;margin:18px 0 6px">二、執行結果</h3>
+      ${hSec('執行結果', '二')}
       ${verdictHtml}
       ${diffHtml}
       ${auditHtml}

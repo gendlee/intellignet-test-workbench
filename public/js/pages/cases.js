@@ -261,8 +261,9 @@ async function batchExportWord() {
         try { runsMap.set(c.id, await get(`/api/runs/${c.lastRun.id}`)) } catch { /* 舊記錄無詳情則跳過 */ }
       }
     }
-    exportCasesWord(cases, runsMap)
-    toast(`已導出 ${cases.length} 個案例的 Word 報告`, 'ok')
+    const meta = await loadMeta()
+    exportCasesWord(cases, runsMap, { exporter: meta.currentUser?.name || '' })
+    toast(`已導出 ${cases.length} 個案例的匯總報告`, 'ok')
   } catch (e) {
     toast(e.message, 'err')
   }
