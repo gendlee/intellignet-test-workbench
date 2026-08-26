@@ -60,7 +60,7 @@ function renderBatchBanner(runningBatch) {
   ])
 }
 
-/** 生命周期流程條：待審核 → 測試案例 → 執行 → 通過率（節點 + 尖頭，體現案例生命周期） */
+/** 生命周期流程條：總案例 → 待審核 → 已審核 → 已執行（節點 + 尖頭，體現案例生命周期） */
 function renderLifecycle(s) {
   const arrow = () => el('div', { class: 'lc-arrow', 'aria-hidden': 'true' })
   const node = (label, value, cls, sub, clickable = false) => {
@@ -79,14 +79,14 @@ function renderLifecycle(s) {
     }, inner)
   }
   return el('div', { class: 'lc-flow' }, [
-    node('待審核案例', s.pendingReviews, s.pendingReviews ? 'warn' : 'ok',
+    node('總案例數', s.totalCases, 'brand', el('span', { class: 'lc-txn', text: `交易碼 ${s.coveredTxnCodes} 個` })),
+    arrow(),
+    node('待審核', s.pendingReviews, s.pendingReviews ? 'warn' : 'ok',
       s.pendingReviews ? '點擊查看待審詳情 →' : '全部已審核，點擊查看列表', true),
     arrow(),
-    node('測試案例', s.totalCases, 'brand', el('span', { class: 'lc-txn', text: `交易碼 ${s.coveredTxnCodes} 個` })),
+    node('已審核', s.reviewedCount, 'ok', `通過 ${s.approvedCount} · 駁回 ${s.rejectedCount}`),
     arrow(),
-    node('執行總數', s.totalRuns, '', '含單條與批量'),
-    arrow(),
-    node('通過率', `${s.passRate}%`, s.passRate >= 80 ? 'ok' : s.passRate >= 50 ? 'warn' : 'danger', 'PASS / 總執行'),
+    node('已執行（含場景數）', s.executedCount, '', `覆蓋場景 ${s.executedScenarios} 種`),
   ])
 }
 

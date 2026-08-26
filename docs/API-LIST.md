@@ -76,9 +76,13 @@
 ```json
 { "code": 0, "message": "ok", "data": {
   "totalCases": 10, "totalRuns": 22, "passRate": 32,
-  "pendingReviews": 1, "coveredTxnCodes": 10, "runningBatch": null
+  "pendingReviews": 1, "reviewedCount": 9, "approvedCount": 8, "rejectedCount": 1,
+  "executedCount": 8, "executedScenarios": 8,
+  "coveredTxnCodes": 10, "runningBatch": null
 } }
 ```
+
+- 生命周期節點（總案例 → 待審核 → 已審核 → 已執行）：`reviewedCount` 含通過與駁回；`executedCount` 為有運行記錄的案例數；`executedScenarios` 為已執行案例覆蓋的差異場景（profile）種數。
 
 ### GET /api/dashboard/charts?type=status-distribution
 

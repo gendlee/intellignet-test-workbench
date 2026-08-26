@@ -122,11 +122,19 @@ export function buildRoutes(db) {
     const runs = db.runs
     const verdictCount = (v) => runs.filter((r) => r.verdict === v).length
     const pass = verdictCount('PASS')
+    // 生命周期節點：總案例 → 待審核 → 已審核（通過/駁回）→ 已執行（覆蓋場景）
+    const reviewed = db.cases.filter((c) => c.status !== 'PENDING' && c.status !== 'DRAFT')
+    const executedCases = db.cases.filter((c) => runs.some((r) => r.caseId === c.id))
     return ok({
-      totalCases: db.cases.filter((c) => c.status !== 'DRAFT' || true).length,
+      totalCases: db.cases.length,
       totalRuns: runs.length,
       passRate: runs.length ? Math.round((pass / runs.length) * 100) : 0,
       pendingReviews: db.cases.filter((c) => c.status === 'PENDING').length,
+      reviewedCount: reviewed.length,
+      approvedCount: reviewed.filter((c) => c.status === 'APPROVED').length,
+      rejectedCount: reviewed.filter((c) => c.status === 'REJECTED').length,
+      executedCount: executedCases.length,
+      executedScenarios: new Set(executedCases.map((c) => c.profile)).size,
       coveredTxnCodes: new Set(db.cases.map((c) => c.txnCode)).size,
       runningBatch: db.batchRuns.find((b) => b.status === 'running') || null,
     })

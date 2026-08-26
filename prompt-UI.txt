@@ -18,6 +18,11 @@
 11、Dashboard展示测试汇总信息
 12、支持测试案例导出为Word文档
 
+第四部分（后端实现）
+13、技术栈：JAVA 17，spring-boot ，数据库用 TDSQL（Mysql）
+14、
+
+
 输出：
 HTML页面
 API LIST，方便下一步根据API LIST后台实现
