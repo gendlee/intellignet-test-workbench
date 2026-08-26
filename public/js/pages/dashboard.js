@@ -60,7 +60,7 @@ function renderBatchBanner(runningBatch) {
   ])
 }
 
-/** 生命周期流程條：測試案例 → 執行 → 通過率 → 待審核（節點 + 尖頭，體現案例生命周期） */
+/** 生命周期流程條：待審核 → 測試案例 → 執行 → 通過率（節點 + 尖頭，體現案例生命周期） */
 function renderLifecycle(s) {
   const arrow = () => el('div', { class: 'lc-arrow', 'aria-hidden': 'true' })
   const node = (label, value, cls, sub, clickable = false) => {
@@ -68,7 +68,7 @@ function renderLifecycle(s) {
       el('span', { class: `lc-num ${cls}`, text: String(value) }),
       el('div', { style: 'min-width:0' }, [
         el('div', { class: 'lc-name', text: label }),
-        el('div', { class: 'lc-sub', text: sub }),
+        el('div', { class: 'lc-sub' }, [sub]),
       ]),
     ]
     if (clickable) inner.push(el('span', { class: 'lc-hint', text: '👆 可點擊查看' }))
@@ -79,14 +79,14 @@ function renderLifecycle(s) {
     }, inner)
   }
   return el('div', { class: 'lc-flow' }, [
-    node('測試案例', s.totalCases, 'brand', `${s.coveredTxnCodes} 個交易碼覆蓋`),
+    node('待審核案例', s.pendingReviews, s.pendingReviews ? 'warn' : 'ok',
+      s.pendingReviews ? '點擊查看待審詳情 →' : '全部已審核，點擊查看列表', true),
+    arrow(),
+    node('測試案例', s.totalCases, 'brand', el('span', { class: 'lc-txn', text: `交易碼 ${s.coveredTxnCodes} 個` })),
     arrow(),
     node('執行總數', s.totalRuns, '', '含單條與批量'),
     arrow(),
     node('通過率', `${s.passRate}%`, s.passRate >= 80 ? 'ok' : s.passRate >= 50 ? 'warn' : 'danger', 'PASS / 總執行'),
-    arrow(),
-    node('待審核案例', s.pendingReviews, s.pendingReviews ? 'warn' : 'ok',
-      s.pendingReviews ? '點擊查看待審詳情 →' : '全部已審核，點擊查看列表', true),
   ])
 }
 
