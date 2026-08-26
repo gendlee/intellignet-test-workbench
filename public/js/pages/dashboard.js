@@ -35,7 +35,6 @@ async function init() {
       renderRecentRuns(recent),
     )
     rootEl.append(split)
-    rootEl.append(renderQuickLinks())
   } catch (e) {
     rootEl.innerHTML = `<div class="empty">載入失敗：${esc(e.message)}</div>`
   }
@@ -174,21 +173,6 @@ function renderRecentRuns(recent) {
           el('td', { text: r.runBy }),
           el('td', { class: 'muted', style: 'white-space:nowrap', text: fmtAgo(r.startedAt) }),
         ]))),
-      ]),
-    ]),
-  ])
-  return card
-}
-
-function renderQuickLinks() {
-  const card = el('div', { class: 'card', style: 'margin-top:16px' }, [
-    el('div', { class: 'card-head' }, [el('h2', { text: '常用功能' })]),
-    el('div', { class: 'card-body' }, [
-      el('div', { class: 'grid', style: 'grid-template-columns:1fr 1fr;gap:10px' }, [
-        el('a', { class: 'btn', style: 'justify-content:center', href: '/case-edit.html', text: '＋ 錄入案例（AI 生成）' }),
-        el('a', { class: 'btn', style: 'justify-content:center', href: '/stress.html', text: '⚡ 壓力測試設計' }),
-        el('a', { class: 'btn', style: 'justify-content:center', href: '/test-diff.html', text: '🧪 Diff 引擎自測' }),
-        el('a', { class: 'btn', style: 'justify-content:center', href: '/config.html', text: '⚙ 系統配置' }),
       ]),
     ]),
   ])
