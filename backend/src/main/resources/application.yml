@@ -4,6 +4,13 @@ server:
 spring:
   application:
     name: apitest-backend
+  # H2 內建資料庫瀏覽器：http://localhost:8081/h2-console
+  # JDBC URL: jdbc:h2:mem:apitest  使用者: sa  密碼: (留空)
+  h2:
+    console:
+      enabled: true
+      settings:
+        web-allow-others: true
   # 默認 profile：H2 記憶體庫（MySQL 兼容模式）——零安裝開箱即跑。
   # 連接 MySQL 8 / TDSQL：mvn spring-boot:run -Dspring-boot.run.profiles=mysql
   datasource:
