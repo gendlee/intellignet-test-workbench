@@ -1,0 +1,11 @@
+{
+  "name": "intelligent-test-workbench",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "中銀香港智能化API測試工作台 — 前端（零依賴，HTML+CSS+原生JS）",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test 'shared/diff/__tests__/*.test.js'"
+  }
+}

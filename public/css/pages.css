@@ -1,0 +1,80 @@
+/* ============================================================
+   頁面特定樣式
+   ============================================================ */
+
+/* ---------- 案例管理頁 ---------- */
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+.toolbar .search { flex: 1; min-width: 200px; max-width: 320px; }
+.case-table td { padding-top: 12px; padding-bottom: 12px; }
+.case-table .txn { font-family: var(--mono); font-weight: 600; font-size: 12.5px; color: var(--brand); }
+.case-table .name-cell { max-width: 260px; }
+.case-table .name-cell a { font-weight: 600; color: var(--text); }
+.case-table .name-cell a:hover { color: var(--brand); }
+.case-table .name-cell .sub { font-size: 11.5px; color: var(--text-3); margin-top: 2px; }
+.case-table .lastrun { display: flex; flex-direction: column; gap: 3px; }
+.case-table .lastrun .lr-time { font-size: 11.5px; color: var(--text-3); }
+.case-table td.actions { white-space: nowrap; }
+.case-table .check { width: 34px; }
+.verdict-text { font-size: 11.5px; color: var(--text-3); }
+
+/* ---------- 案例詳情頁 ---------- */
+.detail-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 18px; }
+.detail-head .dh-title { font-size: 20px; font-weight: 700; }
+.detail-head .dh-txn { font-family: var(--mono); font-size: 13px; color: var(--brand); background: var(--brand-soft); padding: 3px 10px; border-radius: 999px; font-weight: 600; }
+.run-state-banner { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-radius: var(--radius); border: 1px solid var(--border); margin-bottom: 16px; background: var(--surface); }
+.run-state-banner.running { border-color: #bfd3f7; background: var(--info-bg); }
+.run-state-banner .rs-title { font-weight: 700; font-size: 14px; }
+
+/* ---------- 錄入頁 ---------- */
+.edit-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+.edit-layout .full { grid-column: 1 / -1; }
+.xml-editor { min-height: 340px; }
+.json-editor { min-height: 340px; }
+.ai-bar { display: flex; align-items: center; gap: 10px; margin: 10px 0 4px; flex-wrap: wrap; }
+.ai-note { font-size: 12px; color: var(--text-3); display: flex; align-items: center; gap: 6px; }
+.ai-note .spark { color: var(--brand); }
+
+/* ---------- Dashboard ---------- */
+.dash-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; align-items: start; }
+.dash-grid .col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+@media (max-width: 1100px) { .dash-grid { grid-template-columns: 1fr; } }
+.batch-banner {
+  display: flex; align-items: center; gap: 14px;
+  padding: 13px 18px;
+  border-radius: var(--radius);
+  background: linear-gradient(90deg, var(--brand), #c92a4f);
+  color: #fff;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow);
+}
+.batch-banner .bb-title { font-weight: 700; font-size: 14px; }
+.batch-banner .bb-sub { font-size: 12px; opacity: 0.85; margin-top: 2px; }
+.batch-banner .btn { background: rgba(255,255,255,0.16); border-color: rgba(255,255,255,0.35); color: #fff; }
+.batch-banner .btn:hover { background: rgba(255,255,255,0.26); }
+
+/* ---------- 壓測頁 ---------- */
+.stress-kpi { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; }
+.chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 1100px) { .chart-grid { grid-template-columns: 1fr; } }
+
+/* ---------- 配置頁 ---------- */
+.config-section { margin-bottom: 22px; }
+.url-segments { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.url-segments .seg {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-size: 12.5px;
+}
+.url-segments .seg.fixed { background: #f0f1f3; color: var(--text-2); font-family: var(--mono); }
+.url-segments .seg.var { background: var(--brand-soft); border-color: #f0c9d2; color: var(--brand); font-family: var(--mono); font-weight: 600; }
+.url-segments .sep { color: var(--text-3); font-size: 14px; }
+.header-row { display: grid; grid-template-columns: 200px 1fr 90px 44px; gap: 8px; align-items: center; margin-bottom: 8px; }
+.url-segments .seg .seg-del, .seg-del {
+  border: none; background: transparent; color: var(--text-3);
+  font-size: 11px; cursor: pointer; padding: 0 2px; border-radius: 4px;
+}
+.url-segments .seg .seg-del:hover { color: var(--danger); }
+.url-segments .seg .input { width: 110px; padding: 3px 8px; font-size: 12px; }

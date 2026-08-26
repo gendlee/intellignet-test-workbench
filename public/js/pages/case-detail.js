@@ -1,0 +1,296 @@
+/**
+ * 案例詳情頁
+ * 需求 4：執行 → 字段級 diff 高亮 + 合理性評估（前端只給可疑度+理由，不自動下結論）
+ * Tab 結構：本次結果 / 運行歷史（重看任一次 diff）/ 審核記錄
+ * 操作：執行、審核通過/駁回、單條 Word 導出
+ */
+
+import { initLayout, loadMeta } from '../layout.js'
+import { get, post } from '../api.js'
+import { esc, el, fmtTime, verdictBadge, statusBadge, stateTypeLabel, kindLabel, plausibilityLabel } from '../util.js'
+import { toast, confirmDialog, renderPagination, openModal } from '../components.js'
+import { renderRunResult } from '../views/diff-view.js'
+import { exportCaseWord } from '../views/word-export.js'
+
+const caseId = new URLSearchParams(location.search).get('id')
+
+const state = {
+  c: null,
+  currentRun: null, // 本次執行結果（含完整 diff）
+  histPage: 1,
+  hist: [],
+  histTotal: 0,
+}
+
+let rootEl
+
+async function loadCase() {
+  state.c = await get(`/api/cases/${caseId}`)
+  render()
+}
+
+function render() {
+  const c = state.c
+  rootEl.innerHTML = ''
+  // 頂部
+  const head = el('div', { class: 'detail-head' }, [
+    el('span', { class: 'dh-title', text: c.name }),
+    el('span', { class: 'dh-txn', text: c.txnCode }),
+    el('span', { innerHTML: statusBadge(c.status) }),
+    el('span', { class: `badge ${c.stateType === 'STATEFUL' ? 'badge-info' : 'badge-neutral'}`, text: stateTypeLabel[c.stateType] }),
+    el('span', { class: 'muted', text: c.module }),
+    el('span', { class: 'spacer' }),
+    el('button', { class: 'btn', text: '編輯', onclick: () => location.href = `/case-edit.html?id=${c.id}` }),
+    el('button', { class: 'btn', text: '⬇ 導出 Word', onclick: () => exportCaseWord(c, state.currentRun || c.lastRun) }),
+    el('button', { class: 'btn btn-primary', id: 'btn-run', text: '▶ 執行測試', onclick: runNow }),
+  ])
+  if (c.precondition) {
+    head.append(el('div', { style: 'width:100%', class: 'flex' }, [
+      el('span', { class: 'badge badge-info', text: '前置條件' }),
+      el('span', { class: 'muted', text: c.precondition }),
+    ]))
+  }
+  rootEl.append(head)
+
+  // 審核操作條（PENDING）
+  if (c.status === 'PENDING') {
+    rootEl.append(renderReviewBar(c))
+  } else if (c.review) {
+    rootEl.append(el('div', { class: 'plausibility-bar', style: 'margin-bottom:16px' }, [
+      el('span', { class: 'pb-label', text: `審核意見（${c.review.reviewer}）` }),
+      el('span', { text: c.review.comment || '（無意見）' }),
+    ]))
+  }
+
+  // Tab 結構
+  const tabs = el('div', { class: 'tabs' }, [
+    tabBtn('本次結果', 'tab-result'),
+    tabBtn('運行歷史', 'tab-hist'),
+    tabBtn('審核記錄', 'tab-audit'),
+  ])
+  const panels = {
+    'tab-result': el('div', { class: 'tab-panel', id: 'panel-result' }),
+    'tab-hist': el('div', { class: 'tab-panel', id: 'panel-hist' }),
+    'tab-audit': el('div', { class: 'tab-panel', id: 'panel-audit' }),
+  }
+  rootEl.append(tabs, panels['tab-result'], panels['tab-hist'], panels['tab-audit'])
+  switchTab('tab-result')
+
+  renderResultPanel()
+  loadHist()
+  renderAuditPanel()
+}
+
+function tabBtn(label, key) {
+  return el('button', { class: 'tab', id: `tab-${key}`, text: label, onclick: () => switchTab(key) })
+}
+function switchTab(key) {
+  for (const b of document.querySelectorAll('.tabs .tab')) b.classList.toggle('active', b.id === `tab-${key}`)
+  for (const p of document.querySelectorAll('.tab-panel')) p.classList.toggle('active', p.id === `panel-${key}`)
+}
+
+/* ---------- 本次結果 ---------- */
+
+function renderResultPanel() {
+  const panel = document.getElementById('panel-result')
+  panel.innerHTML = ''
+  const run = state.currentRun || state.c.lastRun
+  if (!run) {
+    panel.append(el('div', { class: 'empty' }, [
+      el('div', { class: 'empty-icon', text: '▸' }),
+      el('div', { text: '尚未執行，點擊右上「執行測試」開始比對' }),
+    ]))
+    return
+  }
+  if (run.diff) {
+    panel.append(el('div', { class: 'card', style: 'padding:18px' }, [
+      el('div', { class: 'meta-grid', style: 'margin-bottom:16px' }, [
+        mg('執行時間', fmtTime(run.startedAt, true)),
+        mg('執行人', run.runBy),
+        mg('執行類型', run.type === 'BATCH' ? '批量回歸' : '單條執行'),
+        mg('主機延時', run.hostResult ? `${run.hostResult.latencyMs} ms` : '—'),
+        mg('新系統延時', run.newResult ? `${run.newResult.latencyMs} ms` : '—'),
+        mg('接口類型', stateTypeLabel[run.diff.stateType] || run.diff.stateType),
+      ]),
+    ]))
+    panel.append(renderRunResult(run))
+  } else {
+    // 老記錄只有摘要（列表回填場景不會發生，保留相容）
+    panel.append(el('div', { class: 'empty', text: '此運行記錄不含完整比對數據' }))
+  }
+}
+
+/* ---------- 執行 ---------- */
+
+async function runNow() {
+  const btn = document.getElementById('btn-run')
+  if (state.c.status === 'PENDING') {
+    toast('案例尚未審核通過，請先完成審核再執行', 'warn')
+    return
+  }
+  if (state.c.status === 'REJECTED') {
+    const ok = await confirmDialog({
+      title: '案例已被駁回',
+      message: '該案例已被審核駁回。仍要執行測試嗎？',
+      okText: '仍要執行',
+    })
+    if (!ok) return
+  }
+  btn.disabled = true
+  btn.textContent = '執行中…'
+  const panel = document.getElementById('panel-result')
+  panel.innerHTML = `<div class="loading-row"><span class="spinner"></span>正在執行並比對兩側報文…</div>`
+  try {
+    const run = await post(`/api/cases/${caseId}/run`)
+    state.currentRun = run
+    state.c.lastRun = run
+    toast(`執行完成：${run.verdict === 'PASS' ? '通過' : run.verdict === 'FAIL' ? '失敗（存在高可疑差異）' : '有差異'}`, run.verdict === 'FAIL' ? 'err' : run.verdict === 'DIFF' ? 'warn' : 'ok')
+    renderResultPanel()
+    render() // 刷新頂部狀態
+  } catch (e) {
+    panel.innerHTML = `<div class="empty">執行失敗：${esc(e.message)}</div>`
+    toast(e.message, 'err')
+  } finally {
+    const b = document.getElementById('btn-run')
+    if (b) { b.disabled = false; b.textContent = '▶ 執行測試' }
+  }
+}
+
+/* ---------- 運行歷史 ---------- */
+
+async function loadHist() {
+  const panel = document.getElementById('panel-hist')
+  if (!panel) return
+  const data = await get(`/api/cases/${caseId}/runs`, { page: state.histPage, pageSize: 8 })
+  state.hist = data.list
+  state.histTotal = data.total
+  panel.innerHTML = ''
+  if (!data.list.length) {
+    panel.append(el('div', { class: 'empty', text: '暫無運行記錄' }))
+    return
+  }
+  const t = el('table', { class: 'tbl' }, [
+    el('thead', {}, [el('tr', {}, [
+      el('th', { text: '時間' }), el('th', { text: '類型' }), el('th', { text: '判定' }),
+      el('th', { text: '差異摘要' }), el('th', { text: '執行人' }), el('th', { text: '' }),
+    ])]),
+    el('tbody', {}, data.list.map((r) => el('tr', {}, [
+      el('td', { text: fmtTime(r.startedAt, true) }),
+      el('td', { text: r.type === 'BATCH' ? '批量' : '單條' }),
+      el('td', { innerHTML: verdictBadge(r.verdict) }),
+      el('td', { class: 'muted', text: r.summary ? `${r.summary.added} 增 · ${r.summary.deleted} 刪 · ${r.summary.modified} 改` : '—' }),
+      el('td', { text: r.runBy }),
+      el('td', { style: 'text-align:right' }, [el('button', { class: 'btn btn-sm', text: '查看', onclick: () => viewHistRun(r.id) })]),
+    ]))),
+  ])
+  panel.append(el('div', { class: 'table-wrap' }, [t]))
+  const pg = el('div', { id: 'hist-pagination' })
+  panel.append(pg)
+  renderPagination(pg, {
+    page: state.histPage, pageSize: 8, total: state.histTotal,
+    onChange: (p) => { state.histPage = p; loadHist().catch((e) => toast(e.message, 'err')) },
+  })
+}
+
+async function viewHistRun(runId) {
+  const run = await get(`/api/runs/${runId}`)
+  const { close } = openModal({
+    title: `運行記錄 ${run.id} · ${fmtTime(run.startedAt, true)}`,
+    wide: true,
+    foot: [el('button', { class: 'btn', text: '關閉', onclick: close })],
+  })
+  const body = document.querySelector('.modal-body')
+  body.append(renderRunResult(run, { showRaw: false }))
+}
+
+/* ---------- 審核記錄 ---------- */
+
+function renderAuditPanel() {
+  const panel = document.getElementById('panel-audit')
+  panel.innerHTML = ''
+  const logs = state.c.auditLogs || []
+  if (!logs.length) {
+    panel.append(el('div', { class: 'empty', text: '暫無審核/變更記錄' }))
+    return
+  }
+  const tl = el('div', { class: 'timeline' })
+  for (const l of logs) {
+    const cls = l.to === 'APPROVED' ? 'ok' : l.to === 'REJECTED' ? 'danger' : 'warn'
+    tl.append(el('div', { class: 'tl-item' }, [
+      el('div', { class: `tl-dot ${cls}` }),
+      el('div', { class: 'tl-body' }, [
+        el('div', { class: 'tl-title', text: actionLabel(l.action, l.from, l.to) }),
+        el('div', { class: 'tl-sub', text: `${l.operator}${l.comment ? ` — ${l.comment}` : ''}` }),
+      ]),
+      el('div', { class: 'tl-time', text: fmtTime(l.at) }),
+    ]))
+  }
+  panel.append(tl)
+}
+
+function actionLabel(action, from, to) {
+  const map = {
+    create: '建立案例',
+    approve: '審核通過',
+    reject: '審核駁回',
+    update: '更新案例',
+  }
+  return map[action] || `${action}${from ? `（${from} → ${to}）` : ''}`
+}
+
+/* ---------- 審核操作 ---------- */
+
+function renderReviewBar(c) {
+  const bar = el('div', { class: 'plausibility-bar', style: 'margin-bottom:16px;background:var(--warn-bg)' }, [
+    el('span', { class: 'pb-label', text: '等待審核' }),
+    el('span', { class: 'muted', text: '請確認主機/新系統案例內容後審核' }),
+    el('span', { class: 'spacer' }),
+    el('button', { class: 'btn', onclick: () => review('reject') }, ['✕ 駁回']),
+    el('button', { class: 'btn btn-primary', onclick: () => review('approve') }, ['✓ 審核通過']),
+  ])
+  return bar
+}
+
+async function review(action) {
+  let comment = ''
+  if (action === 'reject') {
+    const ok = await confirmDialog({ title: '駁回案例', message: '駁回後案例回到可編輯狀態，需修改後重新提交審核。確定駁回？', danger: true, okText: '駁回' })
+    if (!ok) return
+    comment = '審核駁回：案例內容需修改'
+  } else {
+    comment = '審核通過，案例有效'
+  }
+  try {
+    await post(`/api/cases/${caseId}/review`, { action, comment })
+    toast(action === 'approve' ? '已審核通過' : '已駁回', 'ok')
+    state.c = await get(`/api/cases/${caseId}`)
+    render()
+  } catch (e) {
+    toast(e.message, 'err')
+  }
+}
+
+/* ---------- 工具 ---------- */
+
+function mg(label, value) {
+  return el('div', { class: 'mg-item' }, [
+    el('div', { class: 'mg-label', text: label }),
+    el('div', { class: 'mg-value', text: value }),
+  ])
+}
+
+async function init() {
+  initLayout()
+  rootEl = document.getElementById('page')
+  if (!caseId) {
+    rootEl.innerHTML = `<div class="empty">缺少案例 ID</div>`
+    return
+  }
+  try {
+    await loadCase()
+  } catch (e) {
+    rootEl.innerHTML = `<div class="empty">載入失敗：${esc(e.message)}</div>`
+  }
+}
+
+init()
