@@ -144,6 +144,19 @@ export function seedDB(db) {
     ai: AI_CONFIG,
   }
 
+  // 版本號（案例中心維護）：當前月起預生成 36 個月，每月集中（A）/ 非集中（B）各一
+  const versions = []
+  const vNow = new Date()
+  for (let i = 0; i < 36; i++) {
+    const ym = new Date(vNow.getFullYear(), vNow.getMonth() + i, 1)
+    const key = `${ym.getFullYear()}${String(ym.getMonth() + 1).padStart(2, '0')}`
+    versions.push(
+      { code: key + 'A', month: key, mode: 'A', modeLabel: '集中版本', createdAt: isoAt(daysAgo(i % 7, 9 + (i % 4))) },
+      { code: key + 'B', month: key, mode: 'B', modeLabel: '非集中版本', createdAt: isoAt(daysAgo(i % 7, 9 + (i % 4))) },
+    )
+  }
+  for (const v of versions.sort((a, b) => b.code.localeCompare(a.code))) insert(db, 'versions', v)
+
   // 業務模組（可獨立維護）
   const MODULES = [
     { code: 'ACCT', name: '帳戶查詢', description: '帳戶餘額、基本資料與交易明細查詢' },

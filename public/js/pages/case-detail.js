@@ -11,6 +11,7 @@ import { esc, el, fmtTime, verdictBadge, statusBadge, stateTypeLabel, kindLabel,
 import { toast, confirmDialog, renderPagination, openModal } from '../components.js'
 import { renderRunResult } from '../views/diff-view.js'
 import { exportCaseWord } from '../views/word-export.js'
+import { openVersionPicker } from '../views/version-picker.js'
 
 const caseId = new URLSearchParams(location.search).get('id')
 
@@ -203,6 +204,7 @@ function renderResultPanel() {
         mg('執行時間', fmtTime(run.startedAt, true)),
         mg('執行人', run.runBy),
         mg('執行類型', run.type === 'BATCH' ? '批量回歸' : '單條執行'),
+        mg('執行版本', run.version ? el('span', { class: 'badge badge-info mono', text: run.version }) : '—'),
         mg('主機狀態', run.hostResult ? `HTTP ${run.hostResult.httpStatus} · ${run.hostResult.latencyMs} ms` : '—'),
         mg('微服務系統狀態', run.newResult ? `HTTP ${run.newResult.httpStatus} · ${run.newResult.latencyMs} ms` : '—'),
         mg('接口類型', stateTypeLabel[run.diff.stateType] || run.diff.stateType),
@@ -226,6 +228,7 @@ function renderResultPanel() {
         mg('執行時間', fmtTime(run.startedAt, true)),
         mg('執行人', run.runBy),
         mg('執行類型', run.type === 'BATCH' ? '批量回歸' : '單條執行'),
+        mg('執行版本', run.version ? el('span', { class: 'badge badge-info mono', text: run.version }) : '—'),
         mg('HTTP 狀態', run.newResult ? `HTTP ${run.newResult.httpStatus}` : run.httpStatus != null ? `HTTP ${run.httpStatus}` : '—'),
         mg('總耗時', run.newResult ? `${run.newResult.latencyMs} ms` : '—'),
         mg('響應大小', run.newResult?.rawBody ? `${String(run.newResult.rawBody).length} 字元` : '—'),
@@ -312,12 +315,15 @@ async function runNow() {
     })
     if (!ok) return
   }
+  // 執行前選擇版本號（案例中心維護，預生成三年）
+  const version = await openVersionPicker({ title: `執行測試 — ${state.c.name}` })
+  if (!version) return
   btn.disabled = true
-  btn.textContent = '執行中…'
+  btn.textContent = `執行中…（${version}）`
   const panel = document.getElementById('panel-result')
   panel.innerHTML = `<div class="loading-row"><span class="spinner"></span>正在執行並比對兩側報文…</div>`
   try {
-    const run = await post(`/api/cases/${caseId}/run`)
+    const run = await post(`/api/cases/${caseId}/run`, { version })
     state.currentRun = run
     state.c.lastRun = run
     toast(`執行完成：${run.verdict === 'PASS' ? '通過' : run.verdict === 'FAIL' ? '失敗（存在高可疑差異）' : '有差異'}`, run.verdict === 'FAIL' ? 'err' : run.verdict === 'DIFF' ? 'warn' : 'ok')
@@ -347,11 +353,12 @@ async function loadHist() {
   }
   const t = el('table', { class: 'tbl' }, [
     el('thead', {}, [el('tr', {}, [
-      el('th', { text: '時間' }), el('th', { text: '類型' }), el('th', { text: '判定' }),
+      el('th', { text: '時間' }), el('th', { text: '版本' }), el('th', { text: '類型' }), el('th', { text: '判定' }),
       el('th', { text: '差異摘要' }), el('th', { text: '執行人' }), el('th', { text: '' }),
     ])]),
     el('tbody', {}, data.list.map((r) => el('tr', {}, [
       el('td', { text: fmtTime(r.startedAt, true) }),
+      el('td', {}, [r.version ? el('span', { class: 'mono', style: 'font-size:12px;color:var(--brand);font-weight:600', text: r.version }) : el('span', { class: 'muted', text: '—' })]),
       el('td', { text: r.type === 'BATCH' ? '批量' : '單條' }),
       el('td', { innerHTML: verdictBadge(r.verdict) }),
       el('td', { class: 'muted', text: r.summary ? `${r.summary.added} 增 · ${r.summary.deleted} 刪 · ${r.summary.modified} 改` : '—' }),
@@ -371,7 +378,7 @@ async function loadHist() {
 async function viewHistRun(runId) {
   const run = await get(`/api/runs/${runId}`)
   const { close } = openModal({
-    title: `運行記錄 ${run.id} · ${fmtTime(run.startedAt, true)}`,
+    title: `運行記錄 ${run.id} · ${fmtTime(run.startedAt, true)}${run.version ? ` · 版本 ${run.version}` : ''}`,
     wide: true,
     foot: [el('button', { class: 'btn', text: '關閉', onclick: close })],
   })
@@ -451,7 +458,7 @@ async function review(action) {
 function mg(label, value) {
   return el('div', { class: 'mg-item' }, [
     el('div', { class: 'mg-label', text: label }),
-    el('div', { class: 'mg-value', text: value }),
+    el('div', { class: 'mg-value' }, [value]),
   ])
 }
 

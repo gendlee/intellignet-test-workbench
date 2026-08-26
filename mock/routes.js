@@ -25,7 +25,7 @@ function startBatch(db, batch, caseRecs) {
       return
     }
     const c = caseRecs[i++]
-    const run = runCase(c, { config: db.config, type: 'BATCH', batchId: batch.id, runIndex: 1 })
+    const run = runCase(c, { config: db.config, type: 'BATCH', batchId: batch.id, runIndex: 1, version: batch.version })
     insert(db, 'runs', run)
     c.lastRun = run
     batch.progress.finished = i
@@ -90,6 +90,30 @@ export function buildRoutes(db) {
     if (!x) return err(4040, '模組不存在')
     if (db.cases.some((c) => c.module === x.name)) return err(4000, '該模組下仍有案例，無法刪除（可改為停用或先調整案例）')
     remove(db, 'modules', m[1])
+    return ok({ id: m[1], deleted: true })
+  })
+
+  /* ---------- 版本號（案例中心維護；執行時選擇） ---------- */
+  get(/^\/api\/versions$/, () => ok([...db.versions].sort((a, b) => b.code.localeCompare(a.code))))
+  post(/^\/api\/versions$/, (q, m, body) => {
+    const { month, mode } = body || {}
+    if (!/^\d{4}-\d{2}$/.test(month || '')) return err(4000, '月份格式須為 YYYY-MM')
+    if (mode !== 'A' && mode !== 'B') return err(4000, '模式須為 A（集中版本）或 B（非集中版本）')
+    const code = month.replace('-', '') + mode
+    if (db.versions.some((v) => v.code === code)) return err(4000, `版本號 ${code} 已存在`)
+    const rec = insert(db, 'versions', {
+      code,
+      month: month.replace('-', ''),
+      mode,
+      modeLabel: mode === 'A' ? '集中版本' : '非集中版本',
+      createdAt: now(),
+    })
+    return ok(rec)
+  })
+  del(/^\/api\/versions\/([A-Za-z0-9]+)$/, (q, m) => {
+    const v = find(db, 'versions', m[1])
+    if (!v) return err(4040, '版本不存在')
+    remove(db, 'versions', m[1])
     return ok({ id: m[1], deleted: true })
   })
 
@@ -319,11 +343,13 @@ export function buildRoutes(db) {
     return ok({ newInput, envId: env?.id || null })
   })
 
-  /* ---------- 執行 ---------- */
-  post(/^\/api\/cases\/([A-Za-z0-9]+)\/run$/, (q, m) => {
+  /* ---------- 執行（可選指定版本號，版本在案例中心維護） ---------- */
+  post(/^\/api\/cases\/([A-Za-z0-9]+)\/run$/, (q, m, body) => {
     const c = find(db, 'cases', m[1])
     if (!c) return err(4040, '案例不存在')
-    const run = runCase(c, { config: db.config, type: 'SINGLE', runIndex: (db.runs.filter((r) => r.caseId === c.id).length || 0) + 1 })
+    const version = resolveVersion(db, body?.version)
+    if (body?.version && !version) return err(4000, `版本號 ${body.version} 不存在，請先到案例中心維護`)
+    const run = runCase(c, { config: db.config, type: 'SINGLE', runIndex: (db.runs.filter((r) => r.caseId === c.id).length || 0) + 1, version })
     insert(db, 'runs', run)
     c.lastRun = run
     return ok(run)
@@ -336,6 +362,7 @@ export function buildRoutes(db) {
       .map((r) => ({
         id: r.id,
         type: r.type,
+        version: r.version || null,
         verdict: r.verdict,
         summary: r.diff ? r.diff.summary : null,
         runBy: r.runBy,
@@ -357,9 +384,12 @@ export function buildRoutes(db) {
     if (!caseIds.length) return err(4000, '請選擇至少一個案例')
     const recs = caseIds.map((id) => find(db, 'cases', id)).filter(Boolean)
     if (!recs.length) return err(4000, '所選案例不存在')
+    const version = resolveVersion(db, body?.version)
+    if (body?.version && !version) return err(4000, `版本號 ${body.version} 不存在，請先到案例中心維護`)
     const batch = insert(db, 'batchRuns', {
       name: body?.name || `批量回歸 ${now().slice(5, 16)}`,
       caseIds,
+      version: version || null,
       status: 'queued',
       progress: { total: recs.length, finished: 0, pass: 0, diff: 0, fail: 0 },
       runBy: db.meta.currentUser.name,
@@ -517,6 +547,13 @@ export function buildRoutes(db) {
   )
 
   return routes
+}
+
+/** 解析版本號：code 或 id 均可；不存在返回 null（調用方決定是否報錯） */
+function resolveVersion(db, v) {
+  if (!v) return null
+  if (typeof v === 'object') return v.code || null
+  return db.versions.find((x) => x.code === String(v) || x.id === String(v))?.code || null
 }
 
 /** 外部 AI API 轉發（預留）：POST apiBase，body { prompt, model }，Authorization: Bearer apiKey

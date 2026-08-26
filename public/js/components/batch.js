@@ -6,6 +6,7 @@
 import { get, post } from '../api.js'
 import { el } from '../util.js'
 import { toast } from '../components.js'
+import { openVersionPicker } from '../views/version-picker.js'
 
 /**
  * @param {string[]} caseIds 選中的案例 ID
@@ -13,9 +14,12 @@ import { toast } from '../components.js'
  */
 export async function startBatchWithDrawer(caseIds) {
   if (!caseIds.length) return toast('請先勾選案例', 'warn')
+  // 批量執行前選擇版本號（案例中心維護）
+  const version = await openVersionPicker({ title: `批量回歸 — ${caseIds.length} 個案例` })
+  if (!version) return
   let batch
   try {
-    batch = await post('/api/batch-runs', { caseIds })
+    batch = await post('/api/batch-runs', { caseIds, version })
   } catch (e) {
     return toast(e.message, 'err')
   }

@@ -185,9 +185,12 @@
   },
   "hostResult": { "httpStatus": 200, "latencyMs": 42, "rawBody": "…" },
   "newResult":  { "httpStatus": 200, "latencyMs": 11, "rawBody": "…" },
-  "runBy": "測試工程師 陳", "startedAt": "…", "finishedAt": "…"
+  "runBy": "測試工程師 陳", "startedAt": "…", "finishedAt": "…",
+  "version": "202611A"
 } }
 ```
+
+- 請求體可選 `{version: "202611A"}`（案例中心維護的版本號，見 `/api/versions`）；運行記錄會帶 `version` 欄位，版本不存在返回 4000。
 
 - `kind`: `added` | `deleted` | `modified`
 - `plausibility`: `FORMAT`（格式性）| `STRUCTURAL`（結構性）| `DATA`（資料性）
@@ -197,12 +200,12 @@
 
 ### POST /api/batch-runs（需求6：批量回歸）
 
-請求：`{ "caseIds": ["C0001", "C0002", "C0003"] }`
+請求：`{ "caseIds": ["C0001", "C0002", "C0003"], "version": "202611A" }`（`version` 可選，案例中心維護，見 `/api/versions`）
 
 ```json
 { "code": 0, "message": "ok", "data": {
   "id": "SR0040", "name": "批量回歸 08-26T03:30",
-  "caseIds": ["C0001", "C0002"], "status": "running",
+  "caseIds": ["C0001", "C0002"], "status": "running", "version": "202611A",
   "progress": { "total": 2, "finished": 0, "pass": 0, "diff": 0, "fail": 0 },
   "caseResults": [ { "caseId": "C0001", "txnCode": "ACCT1001", "status": "pending" } ],
   "runBy": "測試工程師 陳", "startedAt": "…", "finishedAt": null
@@ -233,6 +236,21 @@
 
 - `POST /api/modules` 請求 `{name, code, description}`（名稱唯一）；`PUT/DELETE /api/modules/{id}` 更新/刪除（被案例引用時刪除返回錯誤）。
 - `caseCount` 為後端按 `/api/cases` 聚合的引用數。
+
+### GET/POST/DELETE /api/versions（版本號維護，案例中心）
+
+版本號格式：`YYYYMM + A（集中版本）/ B（非集中版本）`，如 `202611A` = 2026 年 11 月集中版本。種子在啟動時預生成當前月起 36 個月（三年）每月 A/B 各一，共 72 個。
+
+```json
+{ "code": 0, "message": "ok", "data": [
+  { "id": "V0001", "code": "202611A", "month": "202611", "mode": "A", "modeLabel": "集中版本", "createdAt": "2026-08-26T03:30:00.000Z" }
+] }
+```
+
+- `GET /api/versions` 返回全部版本，按 `code` 倒序（最新在前）。
+- `POST /api/versions` 請求 `{month: "YYYY-MM", mode: "A"|"B"}` → 生成 `code = YYYYMM + mode`；月份格式非法或版本號已存在返回 4000。
+- `DELETE /api/versions/{id}` 刪除版本（僅影響版本列表，不追溯歷史運行）。
+- 執行案例（單條/批量）時傳 `{version: "202611A"}`，運行記錄帶 `version` 欄位；版本不存在返回 4000。詳見 `POST /api/cases/{id}/run` 與 `POST /api/batch-runs`。
 
 ### GET /api/dashboard/charts?type=module-cards（需求1：儀表盤按模組歸類）
 

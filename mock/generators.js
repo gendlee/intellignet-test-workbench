@@ -235,7 +235,7 @@ function renderNew(m) {
  * - http 模式（mode==='http'）：單獨 HTTP 請求，verdict 按 HTTP 狀態碼（2xx=PASS），無 diff
  * 兩種模式都輸出 steps（執行過程步驟，供詳情頁時間線展示）
  */
-export function runCase(c, { config = null, type = 'SINGLE', batchId = null, runBy = '測試工程師 陳', runIndex = 0, at = null } = {}) {
+export function runCase(c, { config = null, type = 'SINGLE', batchId = null, runBy = '測試工程師 陳', runIndex = 0, at = null, version = null } = {}) {
   const startedAt = at || new Date().toISOString()
   const hRng = rng(hash(c.id + 'h' + runIndex))
   const nRng = rng(hash(c.id + 'n' + runIndex))
@@ -257,6 +257,7 @@ export function runCase(c, { config = null, type = 'SINGLE', batchId = null, run
       caseId: c.id,
       batchId,
       type,
+      version: version || null,
       inputSnapshot: {
         hostXml: '',
         newInput: c.newInput || null,
@@ -299,6 +300,7 @@ export function runCase(c, { config = null, type = 'SINGLE', batchId = null, run
     caseId: c.id,
     batchId,
     type,
+    version: version || null,
     inputSnapshot: {
       hostXml: c.hostInput?.rawXml || '',
       newInput: c.newInput || null,
