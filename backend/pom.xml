@@ -67,6 +67,25 @@
   </dependencies>
 
   <build>
+    <!-- 前端打包進 jar：public/ → BOOT-INF/classes/static/（Spring Boot 自動映射靜態資源），
+         shared/ → static/shared/（錄入頁依賴 /shared/diff/xml-parser.js）。
+         env.js 排除（部署機器各自放，缺省時前端同源請求即本 jar 的 /api/*）。 -->
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+      </resource>
+      <resource>
+        <directory>../public</directory>
+        <targetPath>static</targetPath>
+        <excludes>
+          <exclude>env.js</exclude>
+        </excludes>
+      </resource>
+      <resource>
+        <directory>../shared</directory>
+        <targetPath>static/shared</targetPath>
+      </resource>
+    </resources>
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
