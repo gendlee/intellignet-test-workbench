@@ -98,7 +98,7 @@ export function buildRoutes(db) {
   post(/^\/api\/versions$/, (q, m, body) => {
     const { month, mode } = body || {}
     if (!/^\d{4}-\d{2}$/.test(month || '')) return err(4000, '月份格式須為 YYYY-MM')
-    if (mode !== 'A' && mode !== 'B') return err(4000, '模式須為 A（集中版本）或 B（非集中版本）')
+    if (mode !== 'A' && mode !== 'Z') return err(4000, '模式須為 A（集中版本）或 Z（非集中版本）')
     const code = month.replace('-', '') + mode
     if (db.versions.some((v) => v.code === code)) return err(4000, `版本號 ${code} 已存在`)
     const rec = insert(db, 'versions', {

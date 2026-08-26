@@ -1,6 +1,6 @@
 /**
  * 版本管理（案例中心）
- * 版本號格式：YYYYMM + A（集中）/ B（非集中），如 202611A = 2026年11月集中版本。
+ * 版本號格式：YYYYMM + A/Z，202611A = 2026年11月集中版本、202611Z = 2026年11月非集中版本。
  * 預生成三年（36 個月）每月集中/非集中各一；執行案例時選擇本次版本。
  */
 
@@ -17,7 +17,7 @@ async function load() {
   rootEl.append(
     el('div', { class: 'flex', style: 'margin-bottom:14px' }, [
       el('div', { class: 'section-title', style: 'margin:0', text: '版本管理' }),
-      el('span', { class: 'count', text: `${versions.length} 個版本 · 預生成三年（36 個月），每月集中 A / 非集中 B` }),
+      el('span', { class: 'count', text: `${versions.length} 個版本 · 預生成三年（36 個月），每月集中 A / 非集中 Z` }),
     ]),
     renderTable(versions),
   )
@@ -49,7 +49,7 @@ function renderTable(versions) {
   return el('div', { class: 'card' }, [
     el('div', { class: 'card-head' }, [
       el('h2', { text: '版本號列表' }),
-      el('span', { class: 'sub', text: '執行案例（單條/批量）時選擇本次版本；A=集中版本、B=非集中版本' }),
+      el('span', { class: 'sub', text: '執行案例（單條/批量）時選擇本次版本；202611A=集中版本、202611Z=非集中版本（2026年11月）' }),
       el('span', { class: 'spacer' }),
       el('button', { class: 'btn btn-sm btn-primary', text: '＋ 新增版本', onclick: () => openAdd(versions, reRender) }),
     ]),
@@ -77,7 +77,7 @@ function openAdd(versions, reRender) {
     months.map((m) => el('option', { value: m, text: m, selected: m === months[24] })))
   const modeSel = el('select', { class: 'select', style: 'width:100%' }, [
     el('option', { value: 'A', text: '集中版本（後綴 A）' }),
-    el('option', { value: 'B', text: '非集中版本（後綴 B）' }),
+    el('option', { value: 'Z', text: '非集中版本（後綴 Z）' }),
   ])
   const preview = el('code', { style: 'font-size:13px', text: `${months[24].replace('-', '')}A` })
   const refreshPreview = () => { preview.textContent = `${monthSel.value.replace('-', '')}${modeSel.value}` }

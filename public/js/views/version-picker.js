@@ -1,6 +1,6 @@
 /**
  * 版本號選擇器（執行前調用）
- * 版本號格式：YYYYMM + A（集中）/ B（非集中），如 202611A = 2026年11月集中版本。
+ * 版本號格式：YYYYMM + A/Z，202611A = 2026年11月集中版本、202611Z = 2026年11月非集中版本。
  * 版本號在「案例中心 → 版本管理」維護，預生成三年（36 個月）供選擇。
  */
 
@@ -35,7 +35,7 @@ export async function openVersionPicker({ title = '選擇執行版本' } = {}) {
   const body = el('div', {}, [
     el('label', { class: 'field', text: '本次執行版本' }),
     sel,
-    el('div', { class: 'muted', style: 'font-size:12px;margin-top:8px', text: '版本號格式 YYYYMM + A/B：A=集中版本、B=非集中版本；在「案例中心 → 版本管理」維護，預生成三年每月各一。' }),
+    el('div', { class: 'muted', style: 'font-size:12px;margin-top:8px', text: '版本號格式 YYYYMM + A/Z：202611A = 2026年11月集中版本、202611Z = 2026年11月非集中版本；在「案例中心 → 版本管理」維護，預生成三年每月各一。' }),
   ])
   return new Promise((resolve) => {
     const okBtn = el('button', { class: 'btn btn-primary', text: '開始執行', onclick: () => { close(); resolve(sel.value) } })

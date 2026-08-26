@@ -239,7 +239,7 @@
 
 ### GET/POST/DELETE /api/versions（版本號維護，案例中心）
 
-版本號格式：`YYYYMM + A（集中版本）/ B（非集中版本）`，如 `202611A` = 2026 年 11 月集中版本。種子在啟動時預生成當前月起 36 個月（三年）每月 A/B 各一，共 72 個。
+版本號格式：`YYYYMM + A（集中版本）/ Z（非集中版本）`，如 `202611A` = 2026 年 11 月集中版本、`202611Z` = 2026 年 11 月非集中版本。種子在啟動時預生成當前月起 36 個月（三年）每月 A/Z 各一，共 72 個。
 
 ```json
 { "code": 0, "message": "ok", "data": [
@@ -248,7 +248,7 @@
 ```
 
 - `GET /api/versions` 返回全部版本，按 `code` 倒序（最新在前）。
-- `POST /api/versions` 請求 `{month: "YYYY-MM", mode: "A"|"B"}` → 生成 `code = YYYYMM + mode`；月份格式非法或版本號已存在返回 4000。
+- `POST /api/versions` 請求 `{month: "YYYY-MM", mode: "A"|"Z"}` → 生成 `code = YYYYMM + mode`；月份格式非法或版本號已存在返回 4000。
 - `DELETE /api/versions/{id}` 刪除版本（僅影響版本列表，不追溯歷史運行）。
 - 執行案例（單條/批量）時傳 `{version: "202611A"}`，運行記錄帶 `version` 欄位；版本不存在返回 4000。詳見 `POST /api/cases/{id}/run` 與 `POST /api/batch-runs`。
 
