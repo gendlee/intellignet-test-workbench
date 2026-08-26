@@ -66,7 +66,7 @@ function openModuleModal(m = null) {
     ]),
   ])
   const okBtn = el('button', { class: 'btn btn-primary', text: m ? '保存' : '建立', onclick: save })
-  const cancelBtn = el('button', { class: 'btn', text: '取消', onclick: close })
+  const cancelBtn = el('button', { class: 'btn', text: '取消', onclick: () => close() })
   const { close } = openModal({
     title: m ? '編輯模塊' : '新建模塊',
     body: form,

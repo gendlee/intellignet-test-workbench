@@ -93,6 +93,40 @@ export function buildRoutes(db) {
     return ok({ id: m[1], deleted: true })
   })
 
+  /* ---------- 案例類型（可獨立維護；案例.type 引用） ---------- */
+  get(/^\/api\/case-types$/, () => {
+    const withCount = [...db.caseTypes].map((t) => ({
+      ...t,
+      caseCount: db.cases.filter((c) => c.type === t.name).length,
+    }))
+    return ok(withCount)
+  })
+  post(/^\/api\/case-types$/, (q, m, body) => {
+    const { name, description } = body || {}
+    if (!name || !String(name).trim()) return err(4000, '案例類型名稱必填')
+    if (db.caseTypes.some((x) => x.name === name)) return err(4000, `案例類型「${name}」已存在`)
+    const rec = insert(db, 'caseTypes', { name, description: description || '', createdAt: now() })
+    return ok(rec)
+  })
+  put(/^\/api\/case-types\/([A-Za-z0-9]+)$/, (q, m, body) => {
+    const x = find(db, 'caseTypes', m[1])
+    if (!x) return err(4040, '案例類型不存在')
+    const patch = {}
+    if (body?.name) {
+      if (db.caseTypes.some((t) => t.name === body.name && t.id !== x.id)) return err(4000, `案例類型「${body.name}」已存在`)
+      patch.name = body.name
+    }
+    if (body?.description !== undefined) patch.description = body.description
+    return ok(update(db, 'caseTypes', x.id, patch))
+  })
+  del(/^\/api\/case-types\/([A-Za-z0-9]+)$/, (q, m) => {
+    const x = find(db, 'caseTypes', m[1])
+    if (!x) return err(4040, '案例類型不存在')
+    if (db.cases.some((c) => c.type === x.name)) return err(4000, '該類型下仍有案例，無法刪除（可先調整案例類型）')
+    remove(db, 'caseTypes', m[1])
+    return ok({ id: m[1], deleted: true })
+  })
+
   /* ---------- 版本號（案例中心維護；執行時選擇） ---------- */
   get(/^\/api\/versions$/, () => ok([...db.versions].sort((a, b) => b.code.localeCompare(a.code)).map((v) => ({
     ...v,
@@ -267,8 +301,7 @@ export function buildRoutes(db) {
     const { txnCode, name, module, stateType, hostInput, newInput, precondition, mode, hostFormat, type, testType } = body || {}
     if (!txnCode || !name) return err(4000, '交易碼與案例名稱必填')
     if (db.cases.some((c) => c.txnCode === txnCode)) return err(4000, `交易碼 ${txnCode} 已存在`)
-    const CASE_TYPES = ['Regular', 'ECC', 'ExceptionHandling', 'Boundaries']
-    if (type && !CASE_TYPES.includes(type)) return err(4000, `案例類型須為 ${CASE_TYPES.join(' / ')}`)
+    if (type && !db.caseTypes.some((t) => t.name === type)) return err(4000, `案例類型「${type}」不存在，請先到「案例中心 → 案例類型」維護`)
     if (testType && testType !== 'SIT' && testType !== 'UAT') return err(4000, '測試類型須為 SIT 或 UAT')
     const c = insert(db, 'cases', {
       txnCode,
@@ -306,7 +339,10 @@ export function buildRoutes(db) {
     if (stateType) patch.stateType = stateType === 'STATEFUL' ? 'STATEFUL' : 'STATELESS'
     if (mode) patch.mode = mode === 'http' ? 'http' : 'compare'
     if (hostFormat) patch.hostFormat = hostFormat === 'JSON' ? 'JSON' : 'XML'
-    if (type) patch.type = type
+    if (type) {
+      if (!db.caseTypes.some((t) => t.name === type)) return err(4000, `案例類型「${type}」不存在，請先到「案例中心 → 案例類型」維護`)
+      patch.type = type
+    }
     if (testType) patch.testType = testType
     if (hostInput) patch.hostInput = { rawXml: hostInput.rawXml }
     if (newInput) patch.newInput = { ...newInput, refinedByHuman: true }

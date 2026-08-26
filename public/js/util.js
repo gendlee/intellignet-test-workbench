@@ -57,6 +57,7 @@ export const kindLabel = { added: '新增', deleted: '刪除', modified: '修改
 export const plausibilityLabel = { FORMAT: '格式性', STRUCTURAL: '結構性', DATA: '資料性' }
 export const stateTypeLabel = { STATELESS: '無狀態', STATEFUL: '有狀態' }
 export const statusLabel = { DRAFT: '草稿', PENDING: '待審核', APPROVED: '已通過', REJECTED: '已駁回' }
+/** 案例類型內建預設（兜底）；動態可擴展列表以 /api/case-types 為準 */
 export const CASE_TYPES = ['Regular', 'ECC', 'ExceptionHandling', 'Boundaries']
 export const TEST_TYPE_ENVS = { SIT: ['SIT1', 'SIT3'], UAT: ['USMK', 'USMF'] }
 /** 測試類型顯示：SIT（SIT1 · SIT3）/ UAT（USMK · USMF） */

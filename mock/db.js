@@ -1,6 +1,6 @@
 /**
  * 記憶體資料庫（Mock 專用）。與真實後端無關，僅為前端演示提供資料。
- * 集合：cases / runs / batchRuns / stressPlans / stressRuns / auditLogs / modules / versions
+ * 集合：cases / runs / batchRuns / stressPlans / stressRuns / auditLogs / modules / versions / caseTypes
  * 單例：meta / systems / config
  */
 
@@ -20,6 +20,7 @@ export function createDB() {
     auditLogs: [],
     modules: [],
     versions: [],
+    caseTypes: [],
     systems: [],
     meta: null,
     config: null,
@@ -29,7 +30,7 @@ export function createDB() {
 }
 
 export function insert(db, coll, rec) {
-  const id = rec.id || nextId(coll === 'cases' ? 'C' : coll === 'runs' ? 'R' : coll === 'stressPlans' ? 'SP' : coll === 'versions' ? 'V' : coll === 'modules' ? 'M' : 'SR')
+  const id = rec.id || nextId(coll === 'cases' ? 'C' : coll === 'runs' ? 'R' : coll === 'stressPlans' ? 'SP' : coll === 'versions' ? 'V' : coll === 'modules' ? 'M' : coll === 'caseTypes' ? 'CT' : 'SR')
   rec.id = id
   db[coll].unshift(rec) // 新資料在前
   return rec

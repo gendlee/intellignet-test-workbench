@@ -21,11 +21,15 @@
 第四部分（后端实现）
 13、技术栈：Maven、JAVA 17，spring-boot 3.3.5 ，数据库用 TDSQL（可用 Mysql 8代替），mybatis-plus-spring-boot3 3.5.7
 14、根据本次需求前端预留的 API List（详见对应目录），实现对应的后端逻辑，需要本地能支持跑起来和前端联动。
-15、
+15、输出到 backend/ 目录
 
 第五部分 （Skills资产化）
 1、前端生成代码逻辑反向提取Skill，到前端的skill.md
 2、后段生成代码逻辑反向提取Skill，到后端的skill.md
+3、如有其他你觉得有价值的可以形成资产的skill，也可以提取。
+4、以上输出到 skills/ 目录
+5、反向生成prompt.md,复盘整个项目的提示词工程
+4、以上输出到 prompt/ 目录
 
 
 输出：

@@ -13,6 +13,7 @@ const ICONS = {
   stress: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 20h18"/><path d="M6 20v-6M11 20V8M16 20v-10M21 20V4"/></svg>',
   modules: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
   'case-edit': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+  'case-types': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3h4v4H7zM13 3h4v4h-4zM7 9h4v4H7zM13 9h4v4h-4zM7 15h4v4H7zM13 15h4v4h-4z"/></svg>',
   'test-diff': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8.5" height="18" rx="1.5"/><rect x="12.5" y="3" width="8.5" height="18" rx="1.5"/><path d="M7 9l-2 2 2 2M17 9l-2 2 2 2"/></svg>',
   'case-center': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 12h.01M16 12h.01M12 16h.01M16 16h.01"/></svg>',
   'test-tools': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-8 8l-6.9 6.9a2.1 2.1 0 0 1-3-3l6.9-6.9a6 6 0 0 1 8-8z"/></svg>',
@@ -28,6 +29,7 @@ const NAV = [
     children: [
       { key: 'case-edit', href: '/case-edit.html', label: '案例錄入' },
       { key: 'modules', href: '/modules.html', label: '業務模塊' },
+      { key: 'case-types', href: '/case-types.html', label: '案例類型' },
       { key: 'versions', href: '/versions.html', label: '版本管理' },
     ],
   },
@@ -47,6 +49,7 @@ const TITLES = {
   'case-edit': '案例錄入 / 編輯',
   'case-detail': '案例詳情',
   modules: '業務模塊',
+  'case-types': '案例類型',
   versions: '版本管理',
   stress: '壓力測試設計',
   config: '系統配置',

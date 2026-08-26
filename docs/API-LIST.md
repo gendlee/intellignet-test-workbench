@@ -262,7 +262,7 @@
 
 - 查詢參數新增 `version`（可選）：僅返回在該版本下執行過的案例（`version` 對應的運行記錄去重），用於回溯歷史執行；「案例管理」頁預設選中最新版本號。
 - 案例新增欄位：
-  - `type`: `Regular` | `ECC` | `ExceptionHandling` | `Boundaries`（案例類型，預設 `Regular`；POST/PUT 白名單校驗，非法返回 4000「案例類型須為 Regular / ECC / ExceptionHandling / Boundaries」）
+  - `type`: 案例類型（預設 `Regular`），**可擴展維護**——取值對照 `/api/case-types` 列表（「案例中心 → 案例類型」），非法類型返回 4000「案例類型「X」不存在，請先到「案例中心 → 案例類型」維護」
   - `testType`: `SIT` | `UAT`（測試類型，預設 `SIT`；SIT 涵蓋 SIT1/SIT3、UAT 涵蓋 USMK/USMF 環境，前端展示 `SIT（SIT1 · SIT3）`）
 - 運行記錄（`POST /api/cases/{id}/run`、`GET /api/cases/{id}/runs`、`GET /api/runs/{id}`）均攜帶 `caseType` / `testType`，在執行結果中體現。
 

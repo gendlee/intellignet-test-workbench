@@ -171,6 +171,19 @@ export function seedDB(db) {
     createdAt: isoAt(daysAgo(10, 9)),
   }))
 
+  // 案例類型（可獨立維護，案例.type 引用此處名稱）
+  const CASE_TYPE_SPECS = [
+    { name: 'Regular', description: '常規成功路徑與基本場景' },
+    { name: 'ECC', description: '異常/錯誤碼場景（Error Code & Condition）' },
+    { name: 'ExceptionHandling', description: '異常處理：超時、重試、併發等' },
+    { name: 'Boundaries', description: '邊界值：最大/最小/空值/超長等' },
+  ]
+  db.caseTypes = CASE_TYPE_SPECS.map((t, i) => ({
+    id: `CT${String(i + 1).padStart(2, '0')}`,
+    ...t,
+    createdAt: isoAt(daysAgo(10, 8)),
+  }))
+
   // 案例
   const cases = CASE_SPECS.map((s, i) => {
     const rawXml = s.req(s.txnCode)

@@ -8,7 +8,7 @@
 
 import { initLayout } from '../layout.js'
 import { get, post, put } from '../api.js'
-import { el, isSecretHeader, maskSecret, CASE_TYPES, testTypeLabel } from '../util.js'
+import { el, isSecretHeader, maskSecret, testTypeLabel } from '../util.js'
 import { openModal, toast } from '../components.js'
 import { parseRows, serializeRows, renderFieldForm } from '../views/field-editor.js'
 
@@ -32,6 +32,7 @@ const state = {
   bodyFormMode: false,
   bodyRows: [],
   modules: [],
+  caseTypes: [],        // 案例類型列表（/api/case-types，可擴展維護）
   aiMeta: null,
 }
 
@@ -133,8 +134,7 @@ function render() {
             el('option', { value: 'STATELESS', text: '無狀態（同輸入應同輸出）' }),
             el('option', { value: 'STATEFUL', text: '有狀態（結果可能受前置狀態影響）' }),
           ])),
-          field('案例類型', el('select', { class: 'select', id: 'f-type', onchange: (e) => (state.type = e.target.value) },
-            CASE_TYPES.map((t) => el('option', { value: t, text: t })))),
+          field('案例類型', typeSelect()),
           field('測試類型', el('select', { class: 'select', id: 'f-testtype', onchange: (e) => (state.testType = e.target.value) }, [
             el('option', { value: 'SIT', text: testTypeLabel('SIT') }),
             el('option', { value: 'UAT', text: testTypeLabel('UAT') }),
@@ -462,6 +462,51 @@ function addField(rows, path, type, value, format) {
   render()
 }
 
+/* ---------- 案例類型下拉（/api/case-types，可內嵌新增） ---------- */
+
+function typeSelect() {
+  const opts = state.caseTypes.map((t) =>
+    el('option', { value: t.name, text: t.name, selected: state.type === t.name })
+  )
+  if (state.type && !state.caseTypes.some((t) => t.name === state.type)) {
+    opts.push(el('option', { value: state.type, text: state.type + '（未登記）', selected: true }))
+  }
+  opts.push(el('option', { value: '__new__', text: '＋ 新增案例類型…' }))
+  return el('select', {
+    class: 'select', id: 'f-type',
+    onchange: (e) => { if (e.target.value === '__new__') { openNewCaseType() } else state.type = e.target.value },
+  }, opts)
+}
+
+function openNewCaseType() {
+  const form = el('div', {}, [
+    el('div', { class: 'field-row' }, [
+      el('label', { class: 'field', text: '類型名稱（唯一）' }),
+      el('input', { class: 'input mono', id: 'nct-name', placeholder: '例：Regression' }),
+    ]),
+    el('div', { class: 'field-row' }, [
+      el('label', { class: 'field', text: '描述' }),
+      el('input', { class: 'input', id: 'nct-desc', placeholder: '該類型適用的場景說明' }),
+    ]),
+  ])
+  const okBtn = el('button', {
+    class: 'btn btn-primary', text: '建立', onclick: async () => {
+      const name = form.querySelector('#nct-name').value.trim()
+      if (!name) return toast('類型名稱必填', 'warn')
+      try {
+        await post('/api/case-types', { name, description: form.querySelector('#nct-desc').value.trim() })
+        state.caseTypes = await get('/api/case-types')
+        state.type = name
+        close()
+        render()
+        toast('案例類型已建立', 'ok')
+      } catch (e) { toast(e.message, 'err') }
+    },
+  })
+  const cancelBtn = el('button', { class: 'btn', text: '取消', onclick: () => close() })
+  const { close } = openModal({ title: '新增案例類型', body: form, foot: [cancelBtn, okBtn] })
+}
+
 /* ---------- 業務模塊下拉 ---------- */
 
 function moduleSelect() {
@@ -606,7 +651,7 @@ async function loadExisting() {
   state.name = c.name
   state.module = c.module
   state.stateType = c.stateType
-  state.type = CASE_TYPES.includes(c.type) ? c.type : 'Regular'
+  state.type = c.type || state.caseTypes[0]?.name || 'Regular'
   state.testType = c.testType === 'UAT' ? 'UAT' : 'SIT'
   state.precondition = c.precondition
   state.mode = c.mode === 'http' ? 'http' : 'compare'
@@ -624,6 +669,9 @@ async function init() {
   try {
     state.modules = await get('/api/modules')
   } catch { /* 模塊載入失敗不阻塞錄入 */ }
+  try {
+    state.caseTypes = await get('/api/case-types')
+  } catch { /* 案例類型載入失敗不阻塞錄入 */ }
   render()
   if (caseId) {
     try {
