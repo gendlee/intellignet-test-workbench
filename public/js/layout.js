@@ -14,14 +14,20 @@ const ICONS = {
   modules: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
   'case-edit': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
   'test-diff': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8.5" height="18" rx="1.5"/><rect x="12.5" y="3" width="8.5" height="18" rx="1.5"/><path d="M7 9l-2 2 2 2M17 9l-2 2 2 2"/></svg>',
+  'case-center': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 12h.01M16 12h.01M12 16h.01M16 16h.01"/></svg>',
   config: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.01a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.01a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1z"/></svg>',
 }
 
 const NAV = [
   { key: 'dashboard', href: '/index.html', label: '儀表板' },
   { key: 'cases', href: '/cases.html', label: '測試案例' },
-  { key: 'case-edit', href: '/case-edit.html', label: '案例錄入' },
-  { key: 'modules', href: '/modules.html', label: '業務模塊' },
+  {
+    key: 'case-center', label: '案例中心',
+    children: [
+      { key: 'case-edit', href: '/case-edit.html', label: '案例錄入' },
+      { key: 'modules', href: '/modules.html', label: '業務模塊' },
+    ],
+  },
   { key: 'stress', href: '/stress.html', label: '壓力測試' },
   { key: 'test-diff', href: '/test-diff.html', label: 'Diff 引擎自測' },
   { key: 'config', href: '/config.html', label: '系統配置' },
@@ -67,9 +73,16 @@ export function initLayout() {
       </div>
     </div>`
 
-  const nav = `<nav>${NAV.map(
-    (n) => `<a href="${n.href}" class="${n.key === page ? 'active' : ''}"><span class="nav-icon">${ICONS[n.key]}</span>${n.label}</a>`
-  ).join('')}</nav>`
+  const navItem = (n) => `<a href="${n.href}" class="${n.key === page ? 'active' : ''}"><span class="nav-icon">${ICONS[n.key]}</span>${n.label}</a>`
+  const nav = `<nav>${NAV.map((n) => {
+    if (!n.children) return navItem(n)
+    const open = n.children.some((c) => c.key === page)
+    return `
+      <div class="nav-group${open ? ' open' : ''}" title="展開 / 收合" onclick="this.classList.toggle('open')">
+        <span class="nav-icon">${ICONS[n.key]}</span>${n.label}<span class="g-arrow">▶</span>
+      </div>
+      <div class="nav-sub">${n.children.map((c) => navItem(c)).join('')}</div>`
+  }).join('')}</nav>`
 
   const foot = `
     <div class="sidebar-foot">
