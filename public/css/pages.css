@@ -183,6 +183,24 @@
 .batch-banner .btn { background: rgba(255,255,255,0.16); border-color: rgba(255,255,255,0.35); color: #fff; }
 .batch-banner .btn:hover { background: rgba(255,255,255,0.26); }
 
+/* ---------- AI 初步分析卡（案例詳情） ---------- */
+.ai-head { font-size: 13.5px; font-weight: 800; }
+.ai-summary { font-size: 13.5px; font-weight: 700; color: var(--text); margin-bottom: 10px; }
+.ai-reasons { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.ai-reasons li { display: flex; gap: 8px; font-size: 13px; color: var(--text-2); line-height: 1.5; }
+.ai-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 6px; }
+.ai-dot.error { background: var(--danger); }
+.ai-dot.warn { background: var(--warn); }
+.ai-dot.info { background: var(--info); }
+.ai-foot {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11.5px; color: var(--text-3);
+  border-top: 1px dashed var(--border);
+  padding-top: 10px;
+}
+.ai-disclaimer { font-style: italic; }
+.ai-err { color: var(--danger); font-size: 13px; font-weight: 600; }
+
 /* ---------- 壓測頁 ---------- */
 .stress-kpi { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; }
 .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }

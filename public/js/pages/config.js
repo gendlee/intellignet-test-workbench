@@ -41,6 +41,7 @@ function render() {
     renderUrlTemplate(),
     renderDefaultHeaders(),
     renderDiffRules(),
+    renderAiConfig(),
     renderPermission(),
   )
 }
@@ -321,6 +322,104 @@ function renderDiffRules() {
   }
 
   return rulesCard
+}
+
+/* ---------- 3.5 AI 初步分析（預留外部 AI API 接入） ---------- */
+
+function renderAiConfig() {
+  const ai = config.ai || {}
+  const card = el('div', { class: 'card', style: 'padding:18px' })
+  const keyInput = el('input', {
+    class: 'input mono', style: 'flex:1;min-width:0',
+    value: ai.apiKey ? maskSecret(ai.apiKey) : '', placeholder: '外部 AI API 密鑰（可選）',
+    readOnly: !!ai.apiKey, disabled: config.readOnly,
+    title: ai.apiKey ? '密鑰欄位，已脫敏顯示' : '',
+    oninput: (e) => { ai.apiKey = e.target.value },
+  })
+  const keyEye = el('button', {
+    class: 'btn btn-sm btn-ghost', text: '👁', title: '顯示 / 隱藏密鑰',
+    style: ai.apiKey ? '' : 'visibility:hidden',
+    onclick: () => {
+      const show = keyInput.readOnly // 當前為掩碼（只讀）→ 點擊顯示明文
+      keyInput.value = show ? ai.apiKey : maskSecret(ai.apiKey)
+      keyInput.readOnly = !show
+    },
+  })
+  const modeSel = el('select', {
+    class: 'select', disabled: config.readOnly,
+    onchange: (e) => { ai.mode = e.target.value; rebuild() },
+  }, [['mock', '本地規則引擎（無需外部 API）'], ['remote', '調用外部 AI API']]
+    .map(([v, label]) => el('option', { value: v, text: label, selected: ai.mode === v })))
+  const baseInput = el('input', {
+    class: 'input mono', style: 'flex:1;min-width:0',
+    value: ai.apiBase || '', placeholder: 'https://…/analyze（remote 模式必填）',
+    disabled: config.readOnly || ai.mode !== 'remote',
+    oninput: (e) => { ai.apiBase = e.target.value.trim() },
+  })
+  const modelInput = el('input', {
+    class: 'input', style: 'flex:1;min-width:0',
+    value: ai.model || '', placeholder: '模型名（可選）',
+    disabled: config.readOnly,
+    oninput: (e) => { ai.model = e.target.value.trim() },
+  })
+  const enabledSwitch = el('label', { class: 'switch', title: '啟用 AI 初步分析' }, [
+    el('input', { type: 'checkbox', checked: !!ai.enabled, disabled: config.readOnly, onchange: (e) => { ai.enabled = e.target.checked } }),
+    el('span', { class: 'slider' }),
+  ])
+  const saveBtn = el('button', { class: 'btn btn-primary btn-sm', text: '保存 AI 配置', onclick: saveAi })
+
+  function rebuild() {
+    card.replaceChildren(
+      el('div', { class: 'section-title' }, [el('span', { text: 'AI 初步分析' }),
+        el('span', { class: 'count', text: '未成功案例原因初步分析（僅供參考）；配置外部 AI API 後由後端轉發請求' })]),
+      el('div', { class: 'form-grid', style: 'margin-top:6px' }, [
+        el('div', { class: 'field-row' }, [
+          el('label', { class: 'field', text: '啟用分析' }),
+          el('div', { class: 'flex', style: 'gap:10px;align-items:center' }, [
+            enabledSwitch,
+            el('span', { class: 'muted', style: 'font-size:11.5px', text: ai.enabled ? '案例詳情頁對未通過案例展示 AI 初步分析' : '未啟用，案例詳情頁不展示分析' }),
+          ]),
+        ]),
+        el('div', { class: 'field-row' }, [
+          el('label', { class: 'field', text: '分析模式' }),
+          modeSel,
+        ]),
+        el('div', { class: 'field-row' }, [
+          el('label', { class: 'field', text: 'AI API 地址' }),
+          el('div', { class: 'flex', style: 'flex:1;min-width:0;gap:8px' }, [baseInput]),
+        ]),
+        el('div', { class: 'field-row' }, [
+          el('label', { class: 'field', text: '模型名' }),
+          modelInput,
+        ]),
+        el('div', { class: 'field-row' }, [
+          el('label', { class: 'field', text: 'API 密鑰' }),
+          el('div', { class: 'flex', style: 'flex:1;min-width:0;gap:6px' }, [keyInput, keyEye]),
+        ]),
+        el('div', { class: 'field-row' }, [
+          el('div', { style: 'grid-column:2' }),
+          el('div', { class: 'muted', style: 'font-size:11.5px;grid-column:2', text: 'remote 模式：後端以 POST 調用所配置地址，body { prompt, model }，Authorization: Bearer <密鑰>；失敗自動回退本地規則並標注。' }),
+        ]),
+      ]),
+      el('div', { class: 'flex', style: 'margin-top:14px' }, [
+        el('span', { class: 'spacer' }),
+        saveBtn,
+      ]),
+    )
+  }
+
+  async function saveAi() {
+    try {
+      const prevKey = config.ai?.apiKey || ''
+      const apiKey = String(keyInput.value).includes('•') ? prevKey : keyInput.value
+      await put('/api/config', { ai: { enabled: ai.enabled, mode: ai.mode, apiBase: ai.apiBase, model: ai.model, apiKey } })
+      toast('AI 分析配置已保存', 'ok')
+      await load()
+    } catch (e) { toast(e.message, 'err') }
+  }
+
+  rebuild()
+  return card
 }
 
 /* ---------- 4. 權限與系統（需求9 展示位） ---------- */

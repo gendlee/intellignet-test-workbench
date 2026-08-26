@@ -41,7 +41,8 @@
 | POST | `/api/stress/plans/{id}/run` | 啟動壓測（僅 `approved|done` 可啟動） | 壓測 |
 | GET | `/api/stress/plans/{id}` | 計劃狀態 + lastRun + review | 壓測 |
 | GET | `/api/stress/runs/{id}` | 壓測結果（summary + series） | 壓測 |
-| GET/PUT | `/api/config` | 系統配置（URL 模板/默認請求頭/diff 規則/環境變量） | 配置 |
+| GET/PUT | `/api/config` | 系統配置（URL 模板/默認請求頭/diff 規則/環境變量/AI 分析） | 配置 |
+| POST | `/api/ai/analyze` | AI 初步分析未成功案例原因（僅供參考；外部 AI API 可經 config.ai 配置接入） | 配置 |
 | GET | `/api/audit-logs?caseId=` | 審核/變更流轉記錄（預留審計） | 詳情 |
 | GET | `/api/cases/export-word` | 導出預留端點（前端預設本地導出，需求12） | — |
 
@@ -286,7 +287,25 @@
 } }
 ```
 
-`PUT /api/config` 接受部分更新（`{urlTemplate?}`, `{defaultHeaders?}`, `{diffRules?}`, `{environments?}`），與現有配置合併。`environments` 為**整值替換**，且保證恰有一個 `current`（請求體無 `current` 時自動設首項為當前）。修改即時影響後續 AI 生成與執行比對。
+`PUT /api/config` 接受部分更新（`{urlTemplate?}`, `{defaultHeaders?}`, `{diffRules?}`, `{environments?}`, `{ai?}`），與現有配置合併。`environments` 為**整值替換**，且保證恰有一個 `current`（請求體無 `current` 時自動設首項為當前）。修改即時影響後續 AI 生成與執行比對。
+
+### POST /api/ai/analyze
+
+`{ caseId?, runId? }` → 對未成功（DIFF/FAIL）運行做初步原因分析，結果**僅供參考**。
+
+- 未傳 `runId` 時取該案例最近一次運行；`verdict = PASS` 返回「無需分析」。
+- `config.ai.mode = 'mock'`（默認）：本地規則引擎基於字段級 diff 明細/HTTP 狀態歸納結構化原因。
+- `config.ai.mode = 'remote'` 且 `apiBase` 已配置：後端以 `POST apiBase` 轉發，`body { prompt, model }`，`Authorization: Bearer <apiKey>`；響應兼容 `{choices[0].message.content} / {content} / {result}`（期望 JSON `{summary, reasons, confidence}`）。外部調用失敗自動回退本地規則並在 `disclaimer` 標注。
+
+```json
+{ "code": 0, "message": "ok", "data": {
+  "summary": "兩側響應存在 1 處字段差異（0 增 / 0 刪 / 1 改），以資料值差異為主",
+  "reasons": [{ "level": "info", "text": "欄位 Header.TxnTime 值不一致（主機「…」vs 微服務「…」）" }],
+  "confidence": "高",
+  "disclaimer": "AI 初步分析僅供參考，請以字段級比對結果為準",
+  "model": "規則引擎（mock）"
+} }
+```
 
 ### POST /api/cases/{id}/review
 

@@ -5,6 +5,7 @@
 
 import { find, findAll, insert, paginate, remove, update } from './db.js'
 import { aiGenerate, buildStressRun, hash, runCase, iso } from './generators.js'
+import { analyzeFailure } from './ai-analyzer.js'
 
 const ok = (data) => ({ code: 0, message: 'ok', data })
 const err = (code, message) => ({ code, message })
@@ -467,8 +468,40 @@ export function buildRoutes(db) {
       const current = envs.some((e) => e.current) ? envs.map((e) => ({ ...e, current: e.current === true })) : [{ ...envs[0], current: true }, ...envs.slice(1).map((e) => ({ ...e, current: false }))]
       patch.environments = current.map((e) => ({ id: e.id, name: e.name || e.id, baseUrl: e.baseUrl || '', current: e.current === true }))
     }
+    if (body?.ai) {
+      const prev = db.config.ai || {}
+      patch.ai = {
+        enabled: body.ai.enabled !== undefined ? body.ai.enabled : prev.enabled,
+        mode: body.ai.mode || prev.mode,
+        apiBase: (body.ai.apiBase ?? prev.apiBase ?? '').trim(),
+        model: (body.ai.model ?? prev.model ?? '').trim(),
+        // 脱敏值（含 •）不落庫，保留原密鑰
+        apiKey: String(body.ai.apiKey ?? '').includes('•') ? prev.apiKey : String(body.ai.apiKey ?? ''),
+      }
+    }
     Object.assign(db.config, patch)
     return ok(db.config)
+  })
+
+  /* ---------- AI 初步分析（預留外部 AI API 接入，通過 config.ai 配置啟用） ---------- */
+  post(/^\/api\/ai\/analyze$/, async (q, m, body) => {
+    const cfg = db.config.ai || {}
+    if (!cfg.enabled) return err(4000, 'AI 分析未啟用（可在系統配置中開啟）')
+    const { caseId, runId } = body || {}
+    const c = caseId ? find(db, 'cases', caseId) : null
+    const run = runId ? find(db, 'runs', runId) : (c ? db.runs.find((r) => r.caseId === c.id) : null)
+    if (!run) return err(4040, '找不到對應的運行記錄')
+    if (cfg.mode === 'remote' && cfg.apiBase) {
+      try {
+        const remote = await remoteAnalyze(run, c, cfg)
+        return ok(remote)
+      } catch (e) {
+        // 外部 API 失敗：回退本地規則引擎，並在響應中標注
+        const local = analyzeFailure(run, c)
+        return ok({ ...local, disclaimer: `${local.disclaimer}（外部 AI 調用失敗，已回退本地規則分析：${e.message}）` })
+      }
+    }
+    return ok(analyzeFailure(run, c))
   })
 
   get(/^\/api\/audit-logs$/, (q) => {
@@ -484,6 +517,38 @@ export function buildRoutes(db) {
   )
 
   return routes
+}
+
+/** 外部 AI API 轉發（預留）：POST apiBase，body { prompt, model }，Authorization: Bearer apiKey
+ * 響應兼容 { choices:[{message:{content}}] } / { content } / { result }；失敗拋錯由調用方回退本地規則 */
+async function remoteAnalyze(run, c, cfg) {
+  const items = (run.diff?.items || []).slice(0, 20)
+    .map((i) => `${i.kind} ${i.path.join('.')}：主機=${i.hostValue ?? ''} vs 微服務=${i.newValue ?? ''}`).join('\n')
+  const prompt = [
+    `你是銀行接口測試分析助手。案例：${c?.name || ''}（${c?.txnCode || ''}），判定：${run.verdict}。`,
+    run.diff
+      ? `兩側報文字段級差異：\n${items || '（無）'}`
+      : `HTTP 狀態：${run.newResult?.httpStatus ?? run.httpStatus}，步驟：${(run.steps || []).map((s) => `${s.name}:${s.status}`).join(',')}`,
+    '請以 JSON 返回 { summary, reasons: [{level:"error|warn|info", text}], confidence }，簡潔列舉最可能的原因。',
+  ].join('\n')
+  const res = await fetch(cfg.apiBase, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(cfg.apiKey ? { Authorization: `Bearer ${cfg.apiKey}` } : {}) },
+    body: JSON.stringify({ prompt, model: cfg.model || 'default', stream: false }),
+  })
+  if (!res.ok) throw new Error(`外部 AI API HTTP ${res.status}`)
+  const j = await res.json().catch(() => { throw new Error('外部 AI API 響應非 JSON') })
+  const content = j?.choices?.[0]?.message?.content ?? j?.content ?? j?.result ?? j?.output
+  if (!content) throw new Error('外部 AI API 響應缺少 content')
+  let parsed
+  try { parsed = typeof content === 'string' ? JSON.parse(content) : content } catch { parsed = { summary: String(content) } }
+  return {
+    summary: parsed.summary || String(content).slice(0, 200),
+    reasons: Array.isArray(parsed.reasons) ? parsed.reasons.map((r) => (typeof r === 'string' ? { level: 'info', text: r } : r)).slice(0, 8) : [],
+    confidence: parsed.confidence || '中',
+    disclaimer: 'AI 初步分析僅供參考，請以字段級比對結果為準',
+    model: cfg.model || 'external',
+  }
 }
 
 export { hash }

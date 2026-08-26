@@ -247,6 +247,53 @@ function renderResultPanel() {
     // 老記錄只有摘要（列表回填場景不會發生，保留相容）
     panel.append(el('div', { class: 'empty', text: '此運行記錄不含完整比對數據' }))
   }
+  // 未成功案例：AI 初步分析原因（僅供參考）
+  if (run.verdict && run.verdict !== 'PASS') panel.append(renderAiCard(run))
+}
+
+/* ---------- AI 初步分析（未成功案例，僅供參考；後端通過配置接入外部 AI API） ---------- */
+
+function renderAiCard(run) {
+  const body = el('div', { class: 'ai-body' })
+  const card = el('div', { class: 'card', style: 'padding:18px;margin-top:14px' }, [
+    el('div', { class: 'flex', style: 'margin-bottom:12px;gap:8px' }, [
+      el('span', { class: 'ai-head', text: '🤖 AI 初步分析' }),
+      el('span', { class: 'badge badge-neutral', text: '僅供參考' }),
+      el('span', { class: 'spacer' }),
+      el('span', { class: 'muted', style: 'font-size:11.5px', text: 'AI 基於比對結果初步歸納原因' }),
+    ]),
+    body,
+  ])
+  loadAi(card, body)
+  return card
+}
+
+async function loadAi(card, body) {
+  body.replaceChildren(el('div', { class: 'loading-row', style: 'padding:6px 0' }, [
+    el('span', { class: 'spinner' }),
+    el('span', { text: 'AI 正在初步分析原因…' }),
+  ]))
+  try {
+    const a = await post('/api/ai/analyze', { caseId, runId: state.currentRun?.id })
+    body.replaceChildren(
+      el('div', { class: 'ai-summary', text: a.summary }),
+      a.reasons?.length ? el('ul', { class: 'ai-reasons' }, a.reasons.map((r) =>
+        el('li', {}, [
+          el('span', { class: `ai-dot ${r.level || 'info'}` }),
+          el('span', { text: r.text }),
+        ]))) : null,
+      el('div', { class: 'ai-foot' }, [
+        el('span', { text: `可信度：${a.confidence} · 來源：${a.model || '—'}` }),
+        el('span', { class: 'spacer' }),
+        el('span', { class: 'ai-disclaimer', text: a.disclaimer }),
+      ]),
+    )
+  } catch (e) {
+    body.replaceChildren(
+      el('div', { class: 'ai-err', text: `AI 分析暫不可用：${e.message}` }),
+      el('div', { class: 'muted', style: 'font-size:12px;margin-top:4px', text: '請檢查系統配置中的 AI 分析設置，或稍後重試' }),
+    )
+  }
 }
 
 /* ---------- 執行 ---------- */

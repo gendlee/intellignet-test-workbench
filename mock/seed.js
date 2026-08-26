@@ -84,6 +84,15 @@ const DEFAULT_HEADERS = [
   { name: 'X-Client-Id', value: 'EBP-CL', enabled: true, secret: false },
 ]
 
+/** AI 初步分析配置：mode='remote' 且 apiBase 配置後，後端轉發外部 AI API 分析原因 */
+const AI_CONFIG = {
+  enabled: true,
+  mode: 'mock',   // 'mock' 本地規則引擎 | 'remote' 調用外部 AI API（預留）
+  apiBase: '',    // 外部 AI API 完整端點（remote 模式，POST JSON { prompt, model }，支持 { choices[0].message.content } / { content } / { result }）
+  model: '',      // 模型名
+  apiKey: '',     // 密鑰（配置頁脱敏顯示）
+}
+
 const DIFF_RULES = {
   arrayMatchMode: 'index',
   arrayMatchKeys: {},
@@ -132,6 +141,7 @@ export function seedDB(db) {
     environments: ENVIRONMENTS,
     defaultHeaders: DEFAULT_HEADERS,
     diffRules: DIFF_RULES,
+    ai: AI_CONFIG,
   }
 
   // 業務模組（可獨立維護）
