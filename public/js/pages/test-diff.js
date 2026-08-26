@@ -66,8 +66,22 @@ async function run() {
     rules = cfg.diffRules || {}
   } catch { /* 保留預設 */ }
 
-  const host = el('textarea', { class: 'textarea', style: 'min-height:300px', placeholder: '貼入主機（XML）報文…' })
-  const fresh = el('textarea', { class: 'textarea', style: 'min-height:300px', placeholder: '貼入微服務系統（JSON）報文…' })
+  const host = el('textarea', { class: 'textarea', placeholder: '貼入主機（XML）報文…' })
+  const fresh = el('textarea', { class: 'textarea', placeholder: '貼入微服務系統（JSON）報文…' })
+  // 兩個輸入框平分左右；只填一邊時該輸入框佔滿整行並加高
+  const hostWrap = el('div', {}, [el('label', { class: 'field', text: '主機系統輸出（XML）' }), host])
+  const freshWrap = el('div', {}, [el('label', { class: 'field', text: '微服務系統輸出（JSON）' }), fresh])
+  const pane = el('div', { class: 'dual-pane', style: 'margin-bottom:12px' }, [hostWrap, freshWrap])
+  const syncPane = () => {
+    const h = host.value.trim().length > 0
+    const f = fresh.value.trim().length > 0
+    const one = h !== f
+    pane.classList.toggle('single', one)
+    hostWrap.classList.toggle('pane-hidden', one && !h)
+    freshWrap.classList.toggle('pane-hidden', one && !f)
+  }
+  host.addEventListener('input', syncPane)
+  fresh.addEventListener('input', syncPane)
   const stateSel = el('select', { class: 'select' }, [
     el('option', { value: 'STATELESS', text: '無狀態' }),
     el('option', { value: 'STATEFUL', text: '有狀態' }),
@@ -84,6 +98,7 @@ async function run() {
   ])
 
   const doCompare = () => {
+    syncPane()
     try {
       const diff = compare(host.value, fresh.value, { rules, stateType: stateSel.value })
       const fakeRun = {
@@ -103,10 +118,7 @@ async function run() {
 
   root.append(
     sampleBar,
-    el('div', { class: 'dual-pane', style: 'margin-bottom:12px' }, [
-      el('div', {}, [el('label', { class: 'field', text: '主機系統輸出（XML）' }), host]),
-      el('div', {}, [el('label', { class: 'field', text: '微服務系統輸出（JSON）' }), fresh]),
-    ]),
+    pane,
     el('div', { class: 'flex', style: 'margin-bottom:14px' }, [
       el('label', { class: 'field', style: 'margin:0', text: '接口類型：' }),
       stateSel,
