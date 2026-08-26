@@ -5,10 +5,11 @@
 
 import { initLayout, loadMeta } from '../layout.js'
 import { get, post, del } from '../api.js'
-import { esc, fmtAgo, verdictBadge, statusBadge, stateTypeLabel, el } from '../util.js'
+import { esc, fmtAgo, verdictBadge, statusBadge, stateTypeLabel, testTypeLabel, el } from '../util.js'
 import { toast, confirmDialog, renderPagination } from '../components.js'
 import { exportCasesWord } from '../views/word-export.js'
 import { startBatchWithDrawer, onBatchDone } from '../components/batch.js'
+import { openVersionPicker } from '../views/version-picker.js'
 
 const state = {
   page: 1,
@@ -16,10 +17,12 @@ const state = {
   keyword: '',
   status: '',
   module: '',
+  version: '',        // 版本篩選：該版本下執行過的案例（預設最新版本）
   total: 0,
   list: [],
   selected: new Set(),
   modules: [],
+  versions: [],
 }
 
 let rootEl
@@ -31,6 +34,7 @@ async function load() {
     keyword: state.keyword,
     status: state.status,
     module: state.module,
+    version: state.version,
   })
   state.total = data.total
   state.list = data.list
@@ -77,6 +81,20 @@ function renderToolbar() {
         el('option', { value: '', text: '全部模組' }),
         ...state.modules.map((m) => el('option', { value: m, text: m })),
       ]),
+      el('select', {
+        class: 'select',
+        title: '篩選該版本下執行過的案例（回溯歷史執行）',
+        onchange: (e) => { state.version = e.target.value; state.page = 1; load().catch(showErr) },
+      }, [
+        el('option', { value: '', text: '全部版本' }),
+        ...state.versions.map((v) => el('option', {
+          value: v.code,
+          text: `${v.code} · ${v.modeLabel}${v.executedCaseCount ? `（執行 ${v.executedCaseCount} 案例）` : ''}`,
+          selected: v.code === state.version,
+        })),
+      ]),
+      // 當前版本篩選提示
+      state.version ? el('span', { class: 'muted', style: 'font-size:12px', text: `版本 ${state.version} 執行過的案例：${state.total} 個` }) : null,
       el('span', { class: 'spacer' }),
       el('button', { class: 'btn', title: '預留：自動化流量接入（本次僅人工錄入）', onclick: () => toast('自動化流量接入為預留功能，本次演示僅支援人工錄入', 'warn') }, [
         '⚡ 流量接入',
@@ -119,7 +137,7 @@ function renderTable() {
   const tbody = el('tbody', {})
   if (!state.list.length) {
     tbody.append(el('tr', {}, [el('td', { colspan: 7 }, [
-      el('div', { class: 'empty', text: '沒有符合條件的案例' }),
+      el('div', { class: 'empty', text: state.version ? `版本 ${state.version} 暫無執行記錄（先執行該版本的案例後即可在此回溯）` : '沒有符合條件的案例' }),
     ])]))
   }
   for (const c of state.list) {
@@ -136,7 +154,7 @@ function renderTable() {
       el('td', {}, [el('span', { class: 'txn', text: c.txnCode })]),
       el('td', { class: 'name-cell' }, [
         el('a', { href: `/case-detail.html?id=${c.id}`, text: c.name }),
-        el('div', { class: 'sub', text: c.module }),
+        el('div', { class: 'sub', text: `${c.module} · ${c.type || 'Regular'} · ${testTypeLabel(c.testType)}` }),
       ]),
       el('td', {}, [dom(statusBadge(c.status))]),
       el('td', {}, [
@@ -160,13 +178,16 @@ function renderTable() {
   return el('div', { class: 'table-wrap' }, [t])
 }
 
-/** 單條執行：行內 loading → 更新 lastRun */
+/** 單條執行：選版本 → 行內 loading → 更新 lastRun */
 async function runCase(c, row) {
+  // 執行前選擇版本號（預選當前篩選版本）
+  const version = await openVersionPicker({ title: `執行測試 — ${c.name}`, selected: state.version || null })
+  if (!version) return
   const btn = row.querySelector('.btn')
   btn.disabled = true
-  btn.textContent = '執行中…'
+  btn.textContent = `執行中…（${version}）`
   try {
-    const run = await post(`/api/cases/${c.id}/run`)
+    const run = await post(`/api/cases/${c.id}/run`, { version })
     toast(`執行完成：${c.txnCode} → ${run.verdict === 'PASS' ? '通過' : run.verdict === 'FAIL' ? '失敗' : '有差異'}`, run.verdict === 'FAIL' ? 'err' : run.verdict === 'DIFF' ? 'warn' : 'ok')
     await load()
   } catch (e) {
@@ -241,14 +262,22 @@ function debounceJs(fn, ms) {
 async function init() {
   initLayout()
   rootEl = document.getElementById('page')
+  const params = new URLSearchParams(location.search)
   // 支持 ?module= 進入即選定模塊（儀表板模塊卡跳轉用）
-  const mod = new URLSearchParams(location.search).get('module')
+  const mod = params.get('module')
   if (mod) state.module = mod
+  // 支持 ?version= 進入即選定版本（版本管理頁「執行記錄」跳轉用）
+  const ver = params.get('version')
+  if (ver) state.version = ver
   try {
     await loadMeta()
     // 模塊下拉用預定義業務模塊（/api/modules），而非當前頁列表
     const mods = await get('/api/modules')
     state.modules = mods.map((m) => m.name)
+    // 版本下拉：預設最新版本（無 ?version= 時）
+    const versions = await get('/api/versions')
+    state.versions = Array.isArray(versions) ? versions : []
+    if (!state.version) state.version = state.versions[0]?.code || ''
     await load()
   } catch (e) {
     showErr(e)

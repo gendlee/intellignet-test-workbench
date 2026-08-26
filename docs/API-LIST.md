@@ -190,11 +190,12 @@
   "hostResult": { "httpStatus": 200, "latencyMs": 42, "rawBody": "…" },
   "newResult":  { "httpStatus": 200, "latencyMs": 11, "rawBody": "…" },
   "runBy": "測試工程師 陳", "startedAt": "…", "finishedAt": "…",
-  "version": "202611A"
+  "version": "202611A", "caseType": "Regular", "testType": "SIT"
 } }
 ```
 
 - 請求體可選 `{version: "202611A"}`（案例中心維護的版本號，見 `/api/versions`）；運行記錄會帶 `version` 欄位，版本不存在返回 4000。
+- 運行記錄攜帶 `caseType`（Regular/ECC/ExceptionHandling/Boundaries）與 `testType`（SIT/UAT），執行結果中體現案例類型與測試類型（需求：執行結果體現類型）。
 
 - `kind`: `added` | `deleted` | `modified`
 - `plausibility`: `FORMAT`（格式性）| `STRUCTURAL`（結構性）| `DATA`（資料性）
@@ -247,14 +248,23 @@
 
 ```json
 { "code": 0, "message": "ok", "data": [
-  { "id": "V0001", "code": "202611A", "month": "202611", "mode": "A", "modeLabel": "集中版本", "createdAt": "2026-08-26T03:30:00.000Z" }
+  { "id": "V0001", "code": "202611A", "month": "202611", "mode": "A", "modeLabel": "集中版本", "createdAt": "2026-08-26T03:30:00.000Z",
+    "runCount": 5, "executedCaseCount": 3 }
 ] }
 ```
 
-- `GET /api/versions` 返回全部版本，按 `code` 倒序（最新在前）。
+- `GET /api/versions` 返回全部版本，按 `code` 倒序（最新在前）；`runCount` = 該版本執行總次數、`executedCaseCount` = 該版本執行過的去重案例數（前端「版本管理」頁的「執行記錄」鏈接跳轉 `cases.html?version=<code>` 回溯歷史執行）。
 - `POST /api/versions` 請求 `{month: "YYYY-MM", mode: "A"|"Z"}` → 生成 `code = YYYYMM + mode`；月份格式非法或版本號已存在返回 4000。
 - `DELETE /api/versions/{id}` 刪除版本（僅影響版本列表，不追溯歷史運行）。
 - 執行案例（單條/批量）時傳 `{version: "202611A"}`，運行記錄帶 `version` 欄位；版本不存在返回 4000。詳見 `POST /api/cases/{id}/run` 與 `POST /api/batch-runs`。
+
+### GET /api/cases（案例列表，含版本篩選）
+
+- 查詢參數新增 `version`（可選）：僅返回在該版本下執行過的案例（`version` 對應的運行記錄去重），用於回溯歷史執行；「案例管理」頁預設選中最新版本號。
+- 案例新增欄位：
+  - `type`: `Regular` | `ECC` | `ExceptionHandling` | `Boundaries`（案例類型，預設 `Regular`；POST/PUT 白名單校驗，非法返回 4000「案例類型須為 Regular / ECC / ExceptionHandling / Boundaries」）
+  - `testType`: `SIT` | `UAT`（測試類型，預設 `SIT`；SIT 涵蓋 SIT1/SIT3、UAT 涵蓋 USMK/USMF 環境，前端展示 `SIT（SIT1 · SIT3）`）
+- 運行記錄（`POST /api/cases/{id}/run`、`GET /api/cases/{id}/runs`、`GET /api/runs/{id}`）均攜帶 `caseType` / `testType`，在執行結果中體現。
 
 ### GET /api/dashboard/charts?type=module-cards（需求1：儀表盤按模組歸類）
 

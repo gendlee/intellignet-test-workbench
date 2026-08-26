@@ -30,6 +30,17 @@ function renderTable(versions) {
       el('td', {}, [el('span', { class: 'mono', style: 'font-weight:700;font-size:13px;color:var(--brand)', text: v.code })]),
       el('td', { class: 'mono', text: `${v.month.slice(0, 4)}-${v.month.slice(4)}` }),
       el('td', {}, [el('span', { class: 'badge ' + (v.mode === 'A' ? 'badge-ok' : 'badge-neutral'), text: v.mode === 'A' ? '集中版本' : '非集中版本' })]),
+      // 執行記錄：可跳轉案例管理回溯該版本執行過的案例
+      el('td', {}, [
+        v.executedCaseCount
+          ? el('a', {
+              class: 'exec-link',
+              href: `/cases.html?version=${v.code}`,
+              title: `該版本下執行過的案例（${v.executedCaseCount} 個案例 · ${v.runCount} 次執行）`,
+              text: `${v.executedCaseCount} 案例 · ${v.runCount} 次執行 →`,
+            })
+          : el('span', { class: 'muted', text: '暫無執行' }),
+      ]),
       el('td', { class: 'muted', style: 'white-space:nowrap', text: fmtTime(v.createdAt) }),
       el('td', {}, [el('button', {
         class: 'btn btn-sm btn-danger', text: '刪除',
@@ -57,7 +68,7 @@ function renderTable(versions) {
       el('table', { class: 'tbl' }, [
         el('thead', {}, [el('tr', {}, [
           el('th', { text: '版本號' }), el('th', { text: '月份' }), el('th', { text: '類型' }),
-          el('th', { text: '創建時間' }), el('th', { text: '操作' }),
+          el('th', { text: '執行記錄' }), el('th', { text: '創建時間' }), el('th', { text: '操作' }),
         ])]),
         tbody,
       ]),

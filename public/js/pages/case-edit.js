@@ -8,7 +8,7 @@
 
 import { initLayout } from '../layout.js'
 import { get, post, put } from '../api.js'
-import { el, isSecretHeader, maskSecret } from '../util.js'
+import { el, isSecretHeader, maskSecret, CASE_TYPES, testTypeLabel } from '../util.js'
 import { openModal, toast } from '../components.js'
 import { parseRows, serializeRows, renderFieldForm } from '../views/field-editor.js'
 
@@ -20,6 +20,8 @@ const state = {
   name: '',
   module: '',
   stateType: 'STATELESS',
+  type: 'Regular',            // Regular / ECC / ExceptionHandling / Boundaries
+  testType: 'SIT',            // SIT（SIT1·SIT3）/ UAT（USMK·USMF）
   precondition: '',
   mode: 'compare',            // compare | http
   hostFormat: 'XML',          // XML | JSON
@@ -131,6 +133,12 @@ function render() {
             el('option', { value: 'STATELESS', text: '無狀態（同輸入應同輸出）' }),
             el('option', { value: 'STATEFUL', text: '有狀態（結果可能受前置狀態影響）' }),
           ])),
+          field('案例類型', el('select', { class: 'select', id: 'f-type', onchange: (e) => (state.type = e.target.value) },
+            CASE_TYPES.map((t) => el('option', { value: t, text: t })))),
+          field('測試類型', el('select', { class: 'select', id: 'f-testtype', onchange: (e) => (state.testType = e.target.value) }, [
+            el('option', { value: 'SIT', text: testTypeLabel('SIT') }),
+            el('option', { value: 'UAT', text: testTypeLabel('UAT') }),
+          ])),
           el('div', { class: 'full' }, [
             field('前置條件（有狀態接口建議填寫）', el('input', { class: 'input', id: 'f-pre', value: state.precondition, placeholder: '例：需先執行開戶 ACCT0001 並產生至少 1 筆交易' })),
           ]),
@@ -166,6 +174,8 @@ function render() {
   // 同步控件值
   form.querySelector('#f-mode').value = state.mode
   form.querySelector('#f-state').value = state.stateType
+  form.querySelector('#f-type').value = state.type
+  form.querySelector('#f-testtype').value = state.testType
   if (state.newInput) fillNewInput()
   if (state.existing?.review) {
     rootEl.append(el('div', { class: 'card', style: 'margin-top:14px' }, [
@@ -542,6 +552,8 @@ async function save() {
     name: document.getElementById('f-name').value.trim(),
     module: state.module,
     stateType: state.stateType,
+    type: state.type,
+    testType: state.testType,
     precondition: document.getElementById('f-pre').value.trim(),
     mode: state.mode,
     hostFormat: state.hostFormat,
@@ -594,6 +606,8 @@ async function loadExisting() {
   state.name = c.name
   state.module = c.module
   state.stateType = c.stateType
+  state.type = CASE_TYPES.includes(c.type) ? c.type : 'Regular'
+  state.testType = c.testType === 'UAT' ? 'UAT' : 'SIT'
   state.precondition = c.precondition
   state.mode = c.mode === 'http' ? 'http' : 'compare'
   state.hostFormat = c.hostFormat === 'JSON' ? 'JSON' : 'XML'

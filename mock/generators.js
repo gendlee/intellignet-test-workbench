@@ -258,6 +258,8 @@ export function runCase(c, { config = null, type = 'SINGLE', batchId = null, run
       batchId,
       type,
       version: version || null,
+      caseType: c.type || 'Regular',      // 執行結果體現案例類型
+      testType: c.testType || 'SIT',      // 執行結果體現測試類型（SIT/UAT）
       inputSnapshot: {
         hostXml: '',
         newInput: c.newInput || null,
@@ -301,6 +303,8 @@ export function runCase(c, { config = null, type = 'SINGLE', batchId = null, run
     batchId,
     type,
     version: version || null,
+    caseType: c.type || 'Regular',      // 執行結果體現案例類型
+    testType: c.testType || 'SIT',      // 執行結果體現測試類型（SIT/UAT）
     inputSnapshot: {
       hostXml: c.hostInput?.rawXml || '',
       newInput: c.newInput || null,

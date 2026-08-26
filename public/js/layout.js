@@ -53,6 +53,12 @@ const TITLES = {
   'test-diff': 'Diff 引擎自測',
 }
 
+/** 父頁面映射：有父頁面的頁面在頂欄右側顯示「← 返回」 */
+const PARENTS = {
+  'case-detail': '/cases.html',
+  'case-edit': '/cases.html',
+}
+
 let metaCache = null
 
 export async function loadMeta(force = false) {
@@ -110,6 +116,7 @@ export function initLayout() {
   topbar.innerHTML = `
     <div class="page-title">${esc(TITLES[page] || '')}</div>
     <span class="spacer"></span>
+    ${PARENTS[page] ? `<a class="back-btn" href="${PARENTS[page]}">← 返回</a>` : ''}
     <span class="sys-tag" id="sys-tag">…</span>
     <div class="user"><span class="avatar" id="user-avatar">…</span><span id="user-name">…</span></div>`
   main.append(topbar)

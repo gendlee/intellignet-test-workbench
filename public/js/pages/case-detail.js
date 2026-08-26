@@ -7,7 +7,7 @@
 
 import { initLayout, loadMeta } from '../layout.js'
 import { get, post } from '../api.js'
-import { esc, el, fmtTime, verdictBadge, statusBadge, stateTypeLabel, kindLabel, plausibilityLabel, isSecretHeader, maskSecret } from '../util.js'
+import { esc, el, fmtTime, verdictBadge, statusBadge, stateTypeLabel, testTypeLabel, kindLabel, plausibilityLabel, isSecretHeader, maskSecret } from '../util.js'
 import { toast, confirmDialog, renderPagination, openModal } from '../components.js'
 import { renderRunResult } from '../views/diff-view.js'
 import { exportCaseWord } from '../views/word-export.js'
@@ -47,6 +47,8 @@ function render() {
     el('span', { class: 'dh-txn', text: c.txnCode }),
     el('span', { innerHTML: statusBadge(c.status) }),
     el('span', { class: `badge ${c.stateType === 'STATEFUL' ? 'badge-info' : 'badge-neutral'}`, text: stateTypeLabel[c.stateType] }),
+    el('span', { class: 'badge badge-neutral', text: c.type || 'Regular' }),
+    el('span', { class: 'badge badge-info', text: testTypeLabel(c.testType) }),
     el('span', { class: 'muted', text: c.module }),
     el('span', { class: 'spacer' }),
     el('button', { class: 'btn', text: '編輯', onclick: () => location.href = `/case-edit.html?id=${c.id}` }),
@@ -208,6 +210,8 @@ function renderResultPanel() {
         mg('主機狀態', run.hostResult ? `HTTP ${run.hostResult.httpStatus} · ${run.hostResult.latencyMs} ms` : '—'),
         mg('微服務系統狀態', run.newResult ? `HTTP ${run.newResult.httpStatus} · ${run.newResult.latencyMs} ms` : '—'),
         mg('接口類型', stateTypeLabel[run.diff.stateType] || run.diff.stateType),
+        mg('案例類型', run.caseType || c.type || 'Regular'),
+        mg('測試類型', testTypeLabel(run.testType || c.testType)),
       ]),
     ]))
     if (run.steps?.length) {
@@ -232,6 +236,8 @@ function renderResultPanel() {
         mg('HTTP 狀態', run.newResult ? `HTTP ${run.newResult.httpStatus}` : run.httpStatus != null ? `HTTP ${run.httpStatus}` : '—'),
         mg('總耗時', run.newResult ? `${run.newResult.latencyMs} ms` : '—'),
         mg('響應大小', run.newResult?.rawBody ? `${String(run.newResult.rawBody).length} 字元` : '—'),
+        mg('案例類型', run.caseType || c.type || 'Regular'),
+        mg('測試類型', testTypeLabel(run.testType || c.testType)),
       ]),
     ]))
     if (run.steps?.length) {
@@ -383,6 +389,10 @@ async function viewHistRun(runId) {
     foot: [el('button', { class: 'btn', text: '關閉', onclick: close })],
   })
   const body = document.querySelector('.modal-body')
+  body.append(el('div', { style: 'margin-bottom:12px;display:flex;gap:8px' }, [
+    el('span', { class: 'badge badge-neutral', text: `案例類型 ${run.caseType || 'Regular'}` }),
+    el('span', { class: 'badge badge-info', text: `測試類型 ${testTypeLabel(run.testType || 'SIT')}` }),
+  ]))
   body.append(renderRunResult(run, { showRaw: false }))
 }
 

@@ -94,7 +94,12 @@ export function buildRoutes(db) {
   })
 
   /* ---------- 版本號（案例中心維護；執行時選擇） ---------- */
-  get(/^\/api\/versions$/, () => ok([...db.versions].sort((a, b) => b.code.localeCompare(a.code))))
+  get(/^\/api\/versions$/, () => ok([...db.versions].sort((a, b) => b.code.localeCompare(a.code)).map((v) => ({
+    ...v,
+    // 該版本下執行過的案例數（回溯歷史執行用）
+    runCount: db.runs.filter((r) => r.version === v.code).length,
+    executedCaseCount: new Set(db.runs.filter((r) => r.version === v.code).map((r) => r.caseId)).size,
+  }))))
   post(/^\/api\/versions$/, (q, m, body) => {
     const { month, mode } = body || {}
     if (!/^\d{4}-\d{2}$/.test(month || '')) return err(4000, '月份格式須為 YYYY-MM')
@@ -236,11 +241,17 @@ export function buildRoutes(db) {
     const keyword = q.get('keyword') || ''
     const status = q.get('status') || ''
     const module = q.get('module') || ''
+    const version = q.get('version') || ''
     let list = db.cases
     if (txnCode) list = list.filter((c) => c.txnCode.includes(txnCode))
     if (keyword) list = list.filter((c) => c.name.includes(keyword) || c.txnCode.includes(keyword))
     if (status) list = list.filter((c) => c.status === status)
     if (module) list = list.filter((c) => c.module === module)
+    // 版本篩選：展示該版本下執行過的案例（便於回溯歷史執行）
+    if (version) {
+      const executed = new Set(db.runs.filter((r) => r.version === version).map((r) => r.caseId))
+      list = list.filter((c) => executed.has(c.id))
+    }
     list = [...list].sort((a, b) => a.txnCode.localeCompare(b.txnCode))
     return ok(paginate(list, q.get('page'), q.get('pageSize')))
   })
@@ -253,15 +264,20 @@ export function buildRoutes(db) {
   })
 
   post(/^\/api\/cases$/, (q, m, body) => {
-    const { txnCode, name, module, stateType, hostInput, newInput, precondition, mode, hostFormat } = body || {}
+    const { txnCode, name, module, stateType, hostInput, newInput, precondition, mode, hostFormat, type, testType } = body || {}
     if (!txnCode || !name) return err(4000, '交易碼與案例名稱必填')
     if (db.cases.some((c) => c.txnCode === txnCode)) return err(4000, `交易碼 ${txnCode} 已存在`)
+    const CASE_TYPES = ['Regular', 'ECC', 'ExceptionHandling', 'Boundaries']
+    if (type && !CASE_TYPES.includes(type)) return err(4000, `案例類型須為 ${CASE_TYPES.join(' / ')}`)
+    if (testType && testType !== 'SIT' && testType !== 'UAT') return err(4000, '測試類型須為 SIT 或 UAT')
     const c = insert(db, 'cases', {
       txnCode,
       name,
       systemId: db.meta.currentSystem,
       module: module || '未分類',
       stateType: stateType === 'STATEFUL' ? 'STATEFUL' : 'STATELESS',
+      type: type || 'Regular',
+      testType: testType || 'SIT',
       status: 'PENDING',
       precondition: precondition || '',
       mode: mode === 'http' ? 'http' : 'compare',
@@ -283,13 +299,15 @@ export function buildRoutes(db) {
   put(/^\/api\/cases\/([A-Za-z0-9]+)$/, (q, m, body) => {
     const c = find(db, 'cases', m[1])
     if (!c) return err(4040, '案例不存在')
-    const { name, module, stateType, hostInput, newInput, precondition, mode, hostFormat } = body || {}
+    const { name, module, stateType, hostInput, newInput, precondition, mode, hostFormat, type, testType } = body || {}
     const patch = {}
     if (name) patch.name = name
     if (module) patch.module = module
     if (stateType) patch.stateType = stateType === 'STATEFUL' ? 'STATEFUL' : 'STATELESS'
     if (mode) patch.mode = mode === 'http' ? 'http' : 'compare'
     if (hostFormat) patch.hostFormat = hostFormat === 'JSON' ? 'JSON' : 'XML'
+    if (type) patch.type = type
+    if (testType) patch.testType = testType
     if (hostInput) patch.hostInput = { rawXml: hostInput.rawXml }
     if (newInput) patch.newInput = { ...newInput, refinedByHuman: true }
     if (precondition !== undefined) patch.precondition = precondition
@@ -367,16 +385,21 @@ export function buildRoutes(db) {
     const list = db.runs
       .filter((r) => r.caseId === m[1])
       .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
-      .map((r) => ({
-        id: r.id,
-        type: r.type,
-        version: r.version || null,
-        verdict: r.verdict,
-        summary: r.diff ? r.diff.summary : null,
-        runBy: r.runBy,
-        startedAt: r.startedAt,
-        finishedAt: r.finishedAt,
-      }))
+      .map((r) => {
+        const c = db.cases.find((x) => x.id === r.caseId)
+        return {
+          id: r.id,
+          type: r.type,
+          version: r.version || null,
+          verdict: r.verdict,
+          caseType: r.caseType || c?.type || 'Regular',
+          testType: r.testType || c?.testType || 'SIT',
+          summary: r.diff ? r.diff.summary : null,
+          runBy: r.runBy,
+          startedAt: r.startedAt,
+          finishedAt: r.finishedAt,
+        }
+      })
     return ok(paginate(list, q.get('page'), q.get('pageSize')))
   })
 

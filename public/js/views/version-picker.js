@@ -8,8 +8,8 @@ import { get } from '../api.js'
 import { el } from '../util.js'
 import { openModal } from '../components.js'
 
-/** 彈出版本選擇；返回選中的版本 code（取消返回 null） */
-export async function openVersionPicker({ title = '選擇執行版本' } = {}) {
+/** 彈出版本選擇；返回選中的版本 code（取消返回 null）。selected 指定預選版本 */
+export async function openVersionPicker({ title = '選擇執行版本', selected = null } = {}) {
   let versions = []
   try {
     const res = await get('/api/versions')
@@ -31,7 +31,7 @@ export async function openVersionPicker({ title = '選擇執行版本' } = {}) {
   const sorted = [...versions].sort((a, b) => b.code.localeCompare(a.code))
   const sel = el('select', { class: 'select', style: 'width:100%' },
     sorted.map((v) => el('option', { value: v.code, text: `${v.code} · ${v.modeLabel}（${v.month.slice(0, 4)}-${v.month.slice(4)}）` })))
-  sel.value = sorted[0].code // 預設最新版本
+  sel.value = selected && sorted.some((v) => v.code === selected) ? selected : sorted[0].code // 預設最新版本（或指定版本）
   const body = el('div', {}, [
     el('label', { class: 'field', text: '本次執行版本' }),
     sel,
