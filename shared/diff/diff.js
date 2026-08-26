@@ -151,7 +151,7 @@ function buildResult(fHost, fNew, rules, stateType, opts) {
 /**
  * 主入口
  * @param {string} hostText 主機系統輸出（XML）
- * @param {string} newText  新系統輸出（JSON）
+ * @param {string} newText  微服務系統輸出（JSON）
  * @param {object} [opts]
  *   rules:      比較規則（合併 DEFAULT_RULES）
  *   stateType:  'STATELESS' | 'STATEFUL'
@@ -171,7 +171,7 @@ export function compare(hostText, newText, opts = {}) {
   try {
     newTree = jsonToTree(newText)
   } catch (e) {
-    throw new Error(`新系統報文解析失敗：${e.message}`)
+    throw new Error(`微服務系統報文解析失敗：${e.message}`)
   }
 
   if (rules.arrayMatchMode === 'key') {

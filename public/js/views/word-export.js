@@ -64,7 +64,7 @@ function buildCaseSection(c, run, pageBreak = false) {
         <h3 style="font-size:13pt;color:#333;margin:18px 0 6px">三、字段級差異清單</h3>
         <table border="1" cellspacing="0" cellpadding="4" style="border-collapse:collapse;font-size:9pt;width:100%">
           <tr style="background:#f2f2f2">
-            ${['字段路徑', '類型', '主機（XML）', '新系統（JSON）', '類別', '可疑度', '機器理由'].map((h) => `<th style="${cellStyle}">${h}</th>`).join('')}
+            ${['字段路徑', '類型', '主機（XML）', '微服務系統（JSON）', '類別', '可疑度', '機器理由'].map((h) => `<th style="${cellStyle}">${h}</th>`).join('')}
           </tr>
           ${rowsDiff}
         </table>`

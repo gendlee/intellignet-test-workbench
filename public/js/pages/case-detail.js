@@ -108,7 +108,7 @@ function configCard(c) {
   const rows = []
   rows.push(el('div', { class: 'cfg-row' }, [
     el('span', { class: 'cfg-label', text: '案例模式' }),
-    el('span', { class: `badge ${c.mode === 'http' ? 'badge-info' : 'badge-warn'}`, text: c.mode === 'http' ? '獨立 HTTP 模式' : '對比模式（主機 vs 新系統）' }),
+    el('span', { class: `badge ${c.mode === 'http' ? 'badge-info' : 'badge-warn'}`, text: c.mode === 'http' ? '獨立 HTTP 模式' : '對比模式（主機 vs 微服務系統）' }),
     el('span', { class: 'badge badge-neutral', text: `主機格式 ${c.hostFormat || 'XML'}` }),
     el('span', { class: 'badge badge-neutral', text: '請求格式 JSON' }),
   ]))
@@ -204,7 +204,7 @@ function renderResultPanel() {
         mg('執行人', run.runBy),
         mg('執行類型', run.type === 'BATCH' ? '批量回歸' : '單條執行'),
         mg('主機狀態', run.hostResult ? `HTTP ${run.hostResult.httpStatus} · ${run.hostResult.latencyMs} ms` : '—'),
-        mg('新系統狀態', run.newResult ? `HTTP ${run.newResult.httpStatus} · ${run.newResult.latencyMs} ms` : '—'),
+        mg('微服務系統狀態', run.newResult ? `HTTP ${run.newResult.httpStatus} · ${run.newResult.latencyMs} ms` : '—'),
         mg('接口類型', stateTypeLabel[run.diff.stateType] || run.diff.stateType),
       ]),
     ]))
@@ -372,7 +372,7 @@ function actionLabel(action, from, to) {
 function renderReviewBar(c) {
   const bar = el('div', { class: 'plausibility-bar', style: 'margin-bottom:16px;background:var(--warn-bg)' }, [
     el('span', { class: 'pb-label', text: '等待審核' }),
-    el('span', { class: 'muted', text: '請確認主機/新系統案例內容後審核' }),
+    el('span', { class: 'muted', text: '請確認主機/微服務系統案例內容後審核' }),
     el('span', { class: 'spacer' }),
     el('button', { class: 'btn', onclick: () => review('reject') }, ['✕ 駁回']),
     el('button', { class: 'btn btn-primary', onclick: () => review('approve') }, ['✓ 審核通過']),

@@ -119,7 +119,7 @@ function renderUrlTemplate() {
   function renderUrlTemplateCard() {
     urlCard.replaceChildren(
       el('div', { class: 'section-title' }, [el('span', { text: 'URL 模板' }),
-        el('span', { class: 'count', text: 'AI 生成案例時依此拼接新系統地址' })]),
+        el('span', { class: 'count', text: 'AI 生成案例時依此拼接微服務系統地址' })]),
       el('div', { class: 'url-segments' }, segRowInner()),
       el('div', { class: 'flex', style: 'margin-top:12px' }, [addVar, el('span', { class: 'spacer' }), saveUrlBtn]),
     )
@@ -206,7 +206,7 @@ function renderDefaultHeaders() {
 
   return el('div', { class: 'card', style: 'padding:18px' }, [
     el('div', { class: 'section-title' }, [el('span', { text: '默認請求頭' }),
-      el('span', { class: 'count', text: '發送至新系統的固定頭部（API-Key 等）' })]),
+      el('span', { class: 'count', text: '發送至微服務系統的固定頭部（API-Key 等）' })]),
     rows,
     el('div', { class: 'flex', style: 'margin-top:12px' }, [
       el('button', { class: 'btn btn-sm', text: '＋ 新增請求頭', disabled: config.readOnly, onclick: () => { config.defaultHeaders.push({ name: '', value: '', enabled: true, secret: false }); rerender() } }),
@@ -340,7 +340,7 @@ function renderPermission() {
       el('div', { class: 'field-row' }, [
         el('label', { class: 'field', text: '功能開關' }),
         el('div', { class: 'flex', style: 'flex-direction:column;gap:2px' }, [
-          feat('AI 生成案例', !!features.aiGenerate, '主控 XML → 新系統 JSON'),
+          feat('AI 生成案例', !!features.aiGenerate, '主控 XML → 微服務系統 JSON'),
           feat('壓力測試', !!features.stress, '並發/時長/曲線'),
           feat('流量接入（Capture）', !!features.capture, '需求3 預留：自動捕獲生產流量轉為測試案例'),
           feat('多系統切換', !!features.multiSystem, '預留：橫向多系統對比'),

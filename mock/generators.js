@@ -41,7 +41,7 @@ export function iso(d = new Date()) {
   return d.toISOString().replace('T', ' ').slice(0, 19)
 }
 
-/* ---------- AI 生成：主機 XML 請求 → 新系統 HTTP/JSON ---------- */
+/* ---------- AI 生成：主機 XML 請求 → 微服務系統 HTTP/JSON ---------- */
 
 /**
  * @param {string} hostXml 主機請求 XML
@@ -110,11 +110,11 @@ function elToJson(el) {
 /**
  * 每個案例的回應「行為設定檔」（seed 指定），決定兩系統輸出的差異場景。
  * 兩側共用同一份基礎資料（merged），Host 渲染為 XML（Header/Body 信封）、
- * 新系統渲染為 JSON（相同信封結構），再依 profile 施加路徑覆蓋/刪除——
+ * 微服務系統渲染為 JSON（相同信封結構），再依 profile 施加路徑覆蓋/刪除——
  * 使 diff 只反映意圖中的差異，不被結構噪音干擾。值全部用字串。
  */
 
-/** profile → 新系統側的覆蓋（路徑式；'Account.X' 指 Body.Account.X，'TxnTime' 指 Header.TxnTime） */
+/** profile → 微服務系統側的覆蓋（路徑式；'Account.X' 指 Body.Account.X，'TxnTime' 指 Header.TxnTime） */
 const NEW_PROFILE = {
   pass: { overrides: {}, drop: [] },
   'diff-time': { overrides: { TxnTime: '2026-08-26T01:30:00.000Z' }, drop: [] }, // 同一時刻，+08:00 → Z
@@ -231,7 +231,7 @@ function renderNew(m) {
 
 /**
  * 執行單條案例 → 完整 Run
- * - compare 模式（mode!=='http'）：主機 vs 新系統輸出，走 shared/diff 比對（與前端同一演算法）
+ * - compare 模式（mode!=='http'）：主機 vs 微服務系統輸出，走 shared/diff 比對（與前端同一演算法）
  * - http 模式（mode==='http'）：單獨 HTTP 請求，verdict 按 HTTP 狀態碼（2xx=PASS），無 diff
  * 兩種模式都輸出 steps（執行過程步驟，供詳情頁時間線展示）
  */
@@ -288,8 +288,8 @@ export function runCase(c, { config = null, type = 'SINGLE', batchId = null, run
     { name: '準備請求', status: 'ok', ms: 4 + Math.floor(hRng() * 8), detail: `主機報文 ${String(c.hostInput?.rawXml || '').length} 字元` },
     { name: '發送主機請求', status: 'ok', ms: hostLatency, detail: `HTTP 200` },
     { name: '解析主機響應', status: 'ok', ms: 6 + Math.floor(hRng() * 10), detail: `${String(hostBody).length} 字元` },
-    { name: '發送新系統請求', status: 'ok', ms: newLatency, detail: `HTTP 200 · ${c.newInput?.url || ''}` },
-    { name: '解析新系統響應', status: 'ok', ms: 6 + Math.floor(nRng() * 10), detail: `${String(newBody).length} 字元` },
+    { name: '發送微服務系統請求', status: 'ok', ms: newLatency, detail: `HTTP 200 · ${c.newInput?.url || ''}` },
+    { name: '解析微服務系統響應', status: 'ok', ms: 6 + Math.floor(nRng() * 10), detail: `${String(newBody).length} 字元` },
     { name: '字段比對', status: 'ok', ms: 3 + Math.floor(nRng() * 12), detail: `發現 ${diff.items.length} 處差異` },
     { name: '判定', status: diff.verdict === 'PASS' ? 'ok' : 'warn', ms: 1, detail: diff.verdict === 'PASS' ? '兩側輸出一致，通過' : diff.verdict === 'DIFF' ? '存在差異，需人工評估' : '存在高可疑差異，判定失敗' },
   ]

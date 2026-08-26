@@ -39,7 +39,7 @@ export function renderDiffSummary(diff) {
     wrap.append(box)
   }
   item('差異總數', s.total)
-  item('新增（新系統獨有）', s.added, 'added')
+  item('新增（微服務系統獨有）', s.added, 'added')
   item('刪除（主機獨有）', s.deleted, 'deleted')
   item('修改', s.modified, 'modified')
   item('高可疑', s.high)
@@ -97,7 +97,7 @@ export function renderDiffList(diff) {
       el('div', { class: `dv-value ${item.kind === 'added' ? 'dv-empty' : item.kind === 'deleted' ? 'host-v' : 'mod-v'}`, innerHTML: renderValue(item.hostValue) }),
     ])
     const newSide = el('div', { class: 'dv-side' }, [
-      el('div', { class: 'dv-label' }, [el('span', { class: 'tag new', text: '新系統（JSON）' }), el('span', { class: 'muted', text: '實際值' })]),
+      el('div', { class: 'dv-label' }, [el('span', { class: 'tag new', text: '微服務系統（JSON）' }), el('span', { class: 'muted', text: '實際值' })]),
       el('div', { class: `dv-value ${item.kind === 'deleted' ? 'dv-empty' : item.kind === 'added' ? 'new-v' : 'mod-v'}`, innerHTML: renderValue(item.newValue) }),
     ])
     values.append(hostSide, newSide)
@@ -129,7 +129,7 @@ export function renderDualRaw(run) {
   }
   pane.append(
     makeSide('主機（XML）', 'host', el('pre', { text: hostBody || '（無報文）' })),
-    makeSide('新系統（JSON）', 'new', el('pre', { text: newBody || '（無報文）' }))
+    makeSide('微服務系統（JSON）', 'new', el('pre', { text: newBody || '（無報文）' }))
   )
   return pane
 }

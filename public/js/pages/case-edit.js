@@ -1,6 +1,6 @@
 /**
  * 案例錄入 / 編輯頁
- * - 對比模式（主機 vs 新系統）：主機報文（XML/JSON 格式可選）→ AI 生成新系統請求 或 手動填寫
+ * - 對比模式（主機 vs 微服務系統）：主機報文（XML/JSON 格式可選）→ AI 生成微服務系統請求 或 手動填寫
  * - 獨立 HTTP 模式：單一請求，判定依據 HTTP 狀態碼
  * - 兩側均支持「原始報文 / 表單模式」切換：字段級增刪改（views/field-editor.js）
  * - 業務模塊下拉（/api/modules），可內嵌新建
@@ -146,7 +146,7 @@ function render() {
         el('div', { class: 'flex', style: 'margin-bottom:14px;gap:10px' }, [
           el('label', { class: 'field', style: 'margin:0', text: '案例模式' }),
           el('select', { class: 'select', id: 'f-mode', style: 'width:230px', onchange: (e) => setMode(e.target.value) }, [
-            el('option', { value: 'compare', text: '對比模式（主機 vs 新系統）' }),
+            el('option', { value: 'compare', text: '對比模式（主機 vs 微服務系統）' }),
             el('option', { value: 'http', text: '獨立 HTTP 模式（單一請求）' }),
           ]),
         ]),
@@ -177,7 +177,7 @@ function render() {
 
 function modeSub() {
   return state.mode === 'compare'
-    ? '主機報文 vs 新系統 HTTP 請求，AI 可一鍵生成新系統側'
+    ? '主機報文 vs 微服務系統 HTTP 請求，AI 可一鍵生成微服務系統側'
     : '單一 HTTP 請求，執行時按 HTTP 狀態碼判定（2xx 為通過）'
 }
 
@@ -229,7 +229,7 @@ function hostPanel() {
     el('div', { class: 'ai-bar' }, [
       el('button', {
         class: 'btn btn-primary', id: 'btn-ai',
-        text: '✨ AI 生成新系統案例',
+        text: '✨ AI 生成微服務系統案例',
         onclick: aiGenerate,
       }),
       el('span', { class: 'ai-note', id: 'ai-note' }, [
@@ -240,10 +240,10 @@ function hostPanel() {
   ])
 }
 
-/* ---------- 新系統側面板（對比 / HTTP 共用字段） ---------- */
+/* ---------- 微服務系統側面板（對比 / HTTP 共用字段） ---------- */
 
 function newPanel() {
-  return el('div', { class: 'panel' }, [...reqFields('新系統接口（HTTP/JSON）', state.newInput ? 'ai-badge' : '')])
+  return el('div', { class: 'panel' }, [...reqFields('微服務系統接口（HTTP/JSON）', state.newInput ? 'ai-badge' : '')])
 }
 
 function httpPanel() {
@@ -259,16 +259,21 @@ function reqFields(title, badgeCls) {
       el('span', { class: 'spacer' }),
       el('span', { class: 'badge ' + badgeCls, id: 'gen-badge', text: state.newInput ? genBadgeText() : '尚未生成' }),
     ]),
-    el('div', { class: 'form-grid', style: 'gap:8px' }, [
-      field('URL', el('div', { class: 'flex' }, [
-        el('select', { class: 'select', id: 'f-method', style: 'width:110px', disabled: !hasNi, onchange: (e) => (state.newInput.method = e.target.value) }, [
+    // 與左側主機面板同構：頂部字段行全寬 + 請求體大編輯區鋪滿剩餘高度（需求 4/5）
+    el('div', { class: 'panel-body' }, [
+      el('div', { class: 'req-row' }, [
+        el('label', { class: 'field', style: 'margin:0;white-space:nowrap', text: 'URL' }),
+        el('select', { class: 'select', id: 'f-method', style: 'width:104px', disabled: !hasNi, onchange: (e) => (state.newInput.method = e.target.value) }, [
           el('option', { text: 'POST' }), el('option', { text: 'GET' }),
           el('option', { text: 'PUT' }), el('option', { text: 'DELETE' }),
         ]),
         el('input', { class: 'input', id: 'f-url', style: 'flex:1', placeholder: 'https://newapi.boc.com.hk/ebp/api/…', disabled: !hasNi, oninput: (e) => (state.newInput.url = e.target.value) }),
-      ])),
-      field('請求頭', el('div', { id: 'f-headers', class: 'flex' }, [el('span', { class: 'muted', text: '可增刪請求頭' })])),
-      el('div', { class: 'full' }, [
+      ]),
+      el('div', { class: 'req-row' }, [
+        el('label', { class: 'field', style: 'margin:0;white-space:nowrap', text: '請求頭' }),
+        el('div', { id: 'f-headers', class: 'flex', style: 'flex:1;gap:8px;flex-wrap:wrap' }, [el('span', { class: 'muted', text: '可增刪請求頭' })]),
+      ]),
+      el('div', { class: 'req-body' }, [
         el('div', { class: 'flex', style: 'gap:8px;margin-bottom:6px;align-items:center' }, [
           el('label', { class: 'field', style: 'margin:0', text: `請求體（${bodyFmt}）` }),
           el('span', { class: 'spacer' }),
@@ -306,7 +311,7 @@ function genBadgeText() {
   return m.refinedByHuman ? 'AI 生成 + 人工微調' : 'AI 生成（未手動修改）'
 }
 
-/** 渲染新系統請求字段值（AI 生成結果或載入既有案例） */
+/** 渲染微服務系統請求字段值（AI 生成結果或載入既有案例） */
 function fillNewInput() {
   const ni = state.newInput
   document.getElementById('f-method').value = ni.method || 'POST'
@@ -491,18 +496,18 @@ async function aiGenerate() {
     state.newInput = newInput
     state.aiMeta = { source: 'ai', generatedAt: new Date().toISOString(), refinedByHuman: false }
     render()
-    toast('AI 已生成新系統案例，可手動微調後提交', 'ok')
+    toast('AI 已生成微服務系統案例，可手動微調後提交', 'ok')
   } catch (e) {
     toast(e.message, 'err')
   } finally {
     btn.disabled = false
-    btn.textContent = '✨ AI 生成新系統案例'
+    btn.textContent = '✨ AI 生成微服務系統案例'
   }
 }
 
 function markDirty() {
   const note = document.getElementById('ai-note')
-  if (note && !state.hostFormMode) note.querySelector('span:last-child').textContent = '主機報文已修改，建議重新生成新系統案例以保持同步'
+  if (note && !state.hostFormMode) note.querySelector('span:last-child').textContent = '主機報文已修改，建議重新生成微服務系統案例以保持同步'
 }
 
 /* ---------- 保存 ---------- */
@@ -533,7 +538,7 @@ async function save() {
   if (state.mode === 'compare') {
     if (!state.hostRaw.trim()) return toast('請輸入主機報文', 'warn')
     if (!payload.newInput) {
-      const yes = await confirmAsk('尚未生成新系統請求，僅保存主機側？建議使用 AI 生成以完成案例。', '仍要保存')
+      const yes = await confirmAsk('尚未生成微服務系統請求，僅保存主機側？建議使用 AI 生成以完成案例。', '仍要保存')
       if (!yes) return
     }
   } else if (!payload.newInput?.url.trim()) {

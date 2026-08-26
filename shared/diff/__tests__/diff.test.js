@@ -232,7 +232,7 @@ test('emptyEqualsNull：null == 空串 == 缺失', () => {
 
 test('解析失敗 → 明確錯誤訊息', () => {
   assert.throws(() => compare('<R><A></R>', '{"A":1}'), /主機報文解析失敗/)
-  assert.throws(() => compare('<R><A>1</A></R>', '{bad json'), /新系統報文解析失敗/)
+  assert.throws(() => compare('<R><A>1</A></R>', '{bad json'), /微服務系統報文解析失敗/)
 })
 
 /* ========== 陣列主鍵對齊（key 模式） ========== */

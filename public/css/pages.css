@@ -28,8 +28,9 @@
 /* ---------- 錄入頁 ---------- */
 .edit-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: stretch; }
 .edit-layout.single { grid-template-columns: 1fr; }
+.edit-layout.single .panel { min-height: 560px; }
 .edit-layout .panel {
-  display: flex; flex-direction: column; min-width: 0;
+  display: flex; flex-direction: column; min-width: 0; min-height: 480px;
   border: 1px solid var(--border); border-radius: var(--radius);
   background: var(--surface-1); padding: 14px 16px 16px;
 }
@@ -39,17 +40,13 @@
 }
 .edit-layout .panel-toolbar .field { margin-bottom: 0; white-space: nowrap; }
 .edit-layout .textarea.editor { flex: 1; min-height: 420px; width: 100%; resize: vertical; }
-.edit-layout .form-grid {
-  margin-bottom: 0; flex: 1; min-height: 0;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: auto auto minmax(0, 1fr);
-  gap: 0 12px;
-}
-.edit-layout .form-grid .field-row { margin-bottom: 12px; }
-.edit-layout .form-grid .full {
-  grid-column: 1 / -1; display: flex; flex-direction: column; min-height: 0;
-}
-.edit-layout .form-grid .full .textarea { flex: 1; min-height: 0; }
+/* 右側請求面板：與左側主機面板同構（頂部字段行全寬 + 大編輯區鋪滿） */
+.edit-layout .panel-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+.edit-layout .req-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.edit-layout .req-row .input { min-width: 0; }
+.edit-layout .req-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.edit-layout .req-body .textarea.editor { flex: 1; min-height: 0; resize: vertical; }
+.edit-layout .req-body .fe-wrap { min-height: 0; }
 /* 表單模式（字段編輯器） */
 .fe-wrap { flex: 1; display: flex; flex-direction: column; min-height: 420px; border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); }
 .fe-form { display: flex; flex-direction: column; min-height: 0; flex: 1; }

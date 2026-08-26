@@ -67,7 +67,7 @@ async function run() {
   } catch { /* 保留預設 */ }
 
   const host = el('textarea', { class: 'textarea', style: 'min-height:300px', placeholder: '貼入主機（XML）報文…' })
-  const fresh = el('textarea', { class: 'textarea', style: 'min-height:300px', placeholder: '貼入新系統（JSON）報文…' })
+  const fresh = el('textarea', { class: 'textarea', style: 'min-height:300px', placeholder: '貼入微服務系統（JSON）報文…' })
   const stateSel = el('select', { class: 'select' }, [
     el('option', { value: 'STATELESS', text: '無狀態' }),
     el('option', { value: 'STATEFUL', text: '有狀態' }),
@@ -105,7 +105,7 @@ async function run() {
     sampleBar,
     el('div', { class: 'dual-pane', style: 'margin-bottom:12px' }, [
       el('div', {}, [el('label', { class: 'field', text: '主機系統輸出（XML）' }), host]),
-      el('div', {}, [el('label', { class: 'field', text: '新系統輸出（JSON）' }), fresh]),
+      el('div', {}, [el('label', { class: 'field', text: '微服務系統輸出（JSON）' }), fresh]),
     ]),
     el('div', { class: 'flex', style: 'margin-bottom:14px' }, [
       el('label', { class: 'field', style: 'margin:0', text: '接口類型：' }),
