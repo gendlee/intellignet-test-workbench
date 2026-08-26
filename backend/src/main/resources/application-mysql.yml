@@ -1,0 +1,13 @@
+# MySQL 8 配置（TDSQL 可用同一驅動，僅更換 URL / 帳密）
+# 啟動前先建庫：CREATE DATABASE apitest_workbench DEFAULT CHARACTER SET utf8mb4;
+# 啟動：mvn spring-boot:run -Dspring-boot.run.profiles=mysql
+spring:
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:apitest_workbench}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Hong_Kong&useSSL=false&allowPublicKeyRetrieval=true
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: ${DB_USER:root}
+    password: ${DB_PASSWORD:}
+  sql:
+    init:
+      mode: always
+      continue-on-error: false

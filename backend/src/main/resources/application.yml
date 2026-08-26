@@ -1,0 +1,37 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: apitest-backend
+  # 默認 profile：H2 記憶體庫（MySQL 兼容模式）——零安裝開箱即跑。
+  # 連接 MySQL 8 / TDSQL：mvn spring-boot:run -Dspring-boot.run.profiles=mysql
+  datasource:
+    # NON_KEYWORDS=MONTH：H2 保留字（MySQL 非保留），列名 month 直接可用
+    url: jdbc:h2:mem:apitest;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1;NON_KEYWORDS=MONTH
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  sql:
+    init:
+      mode: always
+      encoding: UTF-8
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    banner: false
+
+# 模擬延遲（對齊 mock/server.js 的 apiDelay，保持演示節奏一致）
+app:
+  delay:
+    enabled: true
+  delay-ms:
+    query-min: 80
+    query-max: 200
+    ai-generate: 1200
+    run: 1500
+    run-jitter: 1500
+    stress: 1600
+    batch: 300

@@ -1,5 +1,6 @@
 node_modules/
 data/
 public/env.js
+backend/target/
 .DS_Store
 *.log
