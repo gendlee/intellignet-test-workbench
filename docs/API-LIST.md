@@ -242,6 +242,23 @@
 - `POST /api/modules` 請求 `{name, code, description}`（名稱唯一）；`PUT/DELETE /api/modules/{id}` 更新/刪除（被案例引用時刪除返回錯誤）。
 - `caseCount` 為後端按 `/api/cases` 聚合的引用數。
 
+### GET/POST/PUT/DELETE /api/case-types（案例類型維護，可擴展）
+
+案例類型是**可獨立維護**的列表（「案例中心 → 案例類型」頁），案例的 `type` 引用此處名稱；內建預設 Regular / ECC / ExceptionHandling / Boundaries。
+
+```json
+{ "code": 0, "message": "ok", "data": [
+  { "id": "CT01", "name": "Regular", "description": "常規成功路徑與基本場景", "createdAt": "…", "caseCount": 3 }
+] }
+```
+
+- `GET /api/case-types` 返回全部類型，附 `caseCount`（引用該類型的案例數）。
+- `POST /api/case-types` 請求 `{name, description}`；名稱必填且唯一（重複返回 4000「案例類型「X」已存在」）。
+- `PUT /api/case-types/{id}` 更新名稱/描述；改名與既有類型重名返回 4000。
+- `DELETE /api/case-types/{id}` 被案例引用時返回 4000「該類型下仍有案例，無法刪除」。
+- 案例 `POST/PUT` 的 `type` 校驗改為對照此列表：不存在返回 4000「案例類型「X」不存在，請先到「案例中心 → 案例類型」維護」。
+- 案例錄入頁的「案例類型」下拉動態載入此列表，並支持內嵌「＋ 新增案例類型…」。
+
 ### GET/POST/DELETE /api/versions（版本號維護，案例中心）
 
 版本號格式：`YYYYMM + A（集中版本）/ Z（非集中版本）`，如 `202611A` = 2026 年 11 月集中版本、`202611Z` = 2026 年 11 月非集中版本。種子在啟動時預生成當前月起 36 個月（三年）每月 A/Z 各一，共 72 個。
