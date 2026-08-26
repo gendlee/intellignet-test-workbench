@@ -130,9 +130,15 @@ export function buildRoutes(db) {
   /* ---------- 版本號（案例中心維護；執行時選擇） ---------- */
   get(/^\/api\/versions$/, () => ok([...db.versions].sort((a, b) => b.code.localeCompare(a.code)).map((v) => ({
     ...v,
-    // 該版本下執行過的案例數（回溯歷史執行用）
+    // 執行記錄統計（回溯歷史執行用）
     runCount: db.runs.filter((r) => r.version === v.code).length,
     executedCaseCount: new Set(db.runs.filter((r) => r.version === v.code).map((r) => r.caseId)).size,
+    // 顯式關聯統計（批量「加入版本」）：關聯 ∪ 執行過 的去重案例數
+    linkedCaseCount: db.cases.filter((c) => (c.versions || []).includes(v.code)).length,
+    caseCount: new Set([
+      ...db.runs.filter((r) => r.version === v.code).map((r) => r.caseId),
+      ...db.cases.filter((c) => (c.versions || []).includes(v.code)).map((c) => c.id),
+    ]).size,
   }))))
   post(/^\/api\/versions$/, (q, m, body) => {
     const { month, mode } = body || {}
@@ -278,16 +284,45 @@ export function buildRoutes(db) {
     const version = q.get('version') || ''
     let list = db.cases
     if (txnCode) list = list.filter((c) => c.txnCode.includes(txnCode))
-    if (keyword) list = list.filter((c) => c.name.includes(keyword) || c.txnCode.includes(keyword))
+    if (keyword) list = list.filter((c) => c.name.includes(keyword) || c.txnCode.includes(keyword) || c.id.includes(keyword.toUpperCase()))
     if (status) list = list.filter((c) => c.status === status)
     if (module) list = list.filter((c) => c.module === module)
-    // 版本篩選：展示該版本下執行過的案例（便於回溯歷史執行）
+    // 版本篩選：該版本「關聯（批量加入版本）∪ 執行過」的案例（回溯歷史執行）
     if (version) {
       const executed = new Set(db.runs.filter((r) => r.version === version).map((r) => r.caseId))
-      list = list.filter((c) => executed.has(c.id))
+      list = list.filter((c) => executed.has(c.id) || (c.versions || []).includes(version))
     }
     list = [...list].sort((a, b) => a.txnCode.localeCompare(b.txnCode))
     return ok(paginate(list, q.get('page'), q.get('pageSize')))
+  })
+
+  /* 批量關聯版本：選中的案例加入指定版本（幂等，重複關聯自動跳過） */
+  post(/^\/api\/cases\/batch-link$/, (q, m, body) => {
+    const caseIds = Array.isArray(body?.caseIds) ? body.caseIds : []
+    const version = resolveVersion(db, body?.version)
+    if (!version) return err(4000, `版本號 ${body?.version} 不存在，請先到案例中心維護`)
+    if (!caseIds.length) return err(4000, '請先勾選案例')
+    let linked = 0
+    const skipped = []
+    for (const id of caseIds) {
+      const c = find(db, 'cases', id)
+      if (!c) continue
+      const arr = c.versions || []
+      if (arr.includes(version)) { skipped.push(id); continue }
+      c.versions = [...arr, version]
+      linked++
+    }
+    return ok({ linked, skipped: skipped.length, version })
+  })
+
+  /* 取消關聯：案例從指定版本移除（不影響執行歷史） */
+  del(/^\/api\/cases\/([A-Za-z0-9]+)\/versions\/([A-Za-z0-9]+)$/, (q, m) => {
+    const c = find(db, 'cases', m[1])
+    if (!c) return err(4040, '案例不存在')
+    const arr = c.versions || []
+    if (!arr.includes(m[2])) return err(4040, `案例未關聯版本 ${m[2]}`)
+    c.versions = arr.filter((v) => v !== m[2])
+    return ok({ id: c.id, version: m[2], linked: false })
   })
 
   get(/^\/api\/cases\/([A-Za-z0-9]+)$/, (q, m) => {
@@ -300,7 +335,7 @@ export function buildRoutes(db) {
   post(/^\/api\/cases$/, (q, m, body) => {
     const { txnCode, name, module, stateType, hostInput, newInput, precondition, mode, hostFormat, type, testType } = body || {}
     if (!txnCode || !name) return err(4000, '交易碼與案例名稱必填')
-    if (db.cases.some((c) => c.txnCode === txnCode)) return err(4000, `交易碼 ${txnCode} 已存在`)
+    // 交易碼可維護（允許重複），唯一標識為系統生成的案例編號（C 開頭 id）
     if (type && !db.caseTypes.some((t) => t.name === type)) return err(4000, `案例類型「${type}」不存在，請先到「案例中心 → 案例類型」維護`)
     if (testType && testType !== 'SIT' && testType !== 'UAT') return err(4000, '測試類型須為 SIT 或 UAT')
     const c = insert(db, 'cases', {
@@ -332,8 +367,9 @@ export function buildRoutes(db) {
   put(/^\/api\/cases\/([A-Za-z0-9]+)$/, (q, m, body) => {
     const c = find(db, 'cases', m[1])
     if (!c) return err(4040, '案例不存在')
-    const { name, module, stateType, hostInput, newInput, precondition, mode, hostFormat, type, testType } = body || {}
+    const { txnCode, name, module, stateType, hostInput, newInput, precondition, mode, hostFormat, type, testType } = body || {}
     const patch = {}
+    if (txnCode) patch.txnCode = txnCode // 交易碼可維護（唯一標識為案例編號，不變）
     if (name) patch.name = name
     if (module) patch.module = module
     if (stateType) patch.stateType = stateType === 'STATEFUL' ? 'STATEFUL' : 'STATELESS'

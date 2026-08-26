@@ -123,11 +123,12 @@ function render() {
     el('div', { class: 'card' }, [
       el('div', { class: 'card-head' }, [
         el('h2', { text: caseId ? '編輯案例' : '錄入新案例' }),
-        el('span', { class: 'sub', text: '以交易碼唯一標識案例；可選擇對比模式或獨立 HTTP 模式' }),
+        el('span', { class: 'sub', text: '交易碼可維護（非唯一標識）；唯一標識為案例編號，系統自動生成' }),
       ]),
       el('div', { class: 'card-body' }, [
         el('div', { class: 'form-grid' }, [
-          field('交易碼（唯一標識）', el('input', { class: 'input', id: 'f-txn', value: state.txnCode, disabled: !!caseId, placeholder: '例：ACCT1001' })),
+          field('交易碼（可維護）', el('input', { class: 'input', id: 'f-txn', value: state.txnCode, placeholder: '例：ACCT1001' })),
+          caseId ? field('案例編號（唯一標識）', el('input', { class: 'input mono', value: caseId, disabled: true, title: '案例編號由系統生成，作為案例唯一標識' })) : null,
           field('案例名稱', el('input', { class: 'input', id: 'f-name', value: state.name, placeholder: '例：帳戶查詢 — 基本成功' })),
           field('業務模塊', moduleSelect()),
           field('接口類型', el('select', { class: 'select', id: 'f-state', onchange: (e) => (state.stateType = e.target.value) }, [

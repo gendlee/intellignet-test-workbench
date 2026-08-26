@@ -19,9 +19,10 @@
 12、支持测试案例导出为Word文档
 
 第四部分（后端实现）
-13、技术栈：Maven、JAVA 17，spring-boot 3.3.5 ，数据库用 TDSQL（可用 Mysql 8代替），mybatis-plus-spring-boot3 3.5.7
+13、技术栈限定：Maven、JAVA 17，spring-boot 3.3.5 ，数据库用 TDSQL（可用 Mysql 8代替），mybatis-plus-spring-boot3 3.5.7
 14、根据本次需求前端预留的 API List（详见对应目录），实现对应的后端逻辑，需要本地能支持跑起来和前端联动。
-15、输出到 backend/ 目录
+15、后端源码输出到 backend/ 目录
+
 
 第五部分 （Skills资产化）
 1、前端生成代码逻辑反向提取Skill，到前端的skill.md

@@ -89,12 +89,12 @@ function renderToolbar() {
         el('option', { value: '', text: '全部版本' }),
         ...state.versions.map((v) => el('option', {
           value: v.code,
-          text: `${v.code} · ${v.modeLabel}${v.executedCaseCount ? `（執行 ${v.executedCaseCount} 案例）` : ''}`,
+          text: `${v.code} · ${v.modeLabel}${v.caseCount ? `（${v.caseCount} 案例）` : ''}`,
           selected: v.code === state.version,
         })),
       ]),
       // 當前版本篩選提示
-      state.version ? el('span', { class: 'muted', style: 'font-size:12px', text: `版本 ${state.version} 執行過的案例：${state.total} 個` }) : null,
+      state.version ? el('span', { class: 'muted', style: 'font-size:12px', text: `版本 ${state.version} 關聯/執行過的案例：${state.total} 個` }) : null,
       el('span', { class: 'spacer' }),
       el('button', { class: 'btn', title: '預留：自動化流量接入（本次僅人工錄入）', onclick: () => toast('自動化流量接入為預留功能，本次演示僅支援人工錄入', 'warn') }, [
         '⚡ 流量接入',
@@ -108,6 +108,7 @@ function renderToolbar() {
     // 批量操作列（勾選後浮現）
     el('div', { class: `toolbar${state.selected.size ? '' : ' hidden'}` }, [
       el('span', { class: 'muted', text: `已選 ${state.selected.size} 個案例` }),
+      el('button', { class: 'btn', onclick: () => linkCases([...state.selected]) }, ['🔗 加入版本']),
       el('button', { class: 'btn', onclick: () => startBatch() }, ['▶ 批量重跑']),
       el('button', { class: 'btn', onclick: () => batchExportWord() }, ['⬇ 批量導出 Word']),
       el('button', { class: 'btn btn-ghost', text: '取消選取', onclick: () => { state.selected.clear(); render() } }),
@@ -137,7 +138,7 @@ function renderTable() {
   const tbody = el('tbody', {})
   if (!state.list.length) {
     tbody.append(el('tr', {}, [el('td', { colspan: 7 }, [
-      el('div', { class: 'empty', text: state.version ? `版本 ${state.version} 暫無執行記錄（先執行該版本的案例後即可在此回溯）` : '沒有符合條件的案例' }),
+      el('div', { class: 'empty', text: state.version ? `版本 ${state.version} 暫無關聯或執行記錄（可批量勾選案例「加入版本」或執行該版本）` : '沒有符合條件的案例' }),
     ])]))
   }
   for (const c of state.list) {
@@ -151,7 +152,10 @@ function renderTable() {
           render()
         },
       })]),
-      el('td', {}, [el('span', { class: 'txn', text: c.txnCode })]),
+      el('td', {}, [
+        el('span', { class: 'txn', text: c.txnCode }),
+        el('div', { class: 'muted', style: 'font-size:11px', text: `#${c.id}` }),
+      ]),
       el('td', { class: 'name-cell' }, [
         el('a', { href: `/case-detail.html?id=${c.id}`, text: c.name }),
         el('div', { class: 'sub', text: `${c.module} · ${c.type || 'Regular'} · ${testTypeLabel(c.testType)}` }),
@@ -167,6 +171,7 @@ function renderTable() {
         ]) : el('span', { class: 'muted', text: '從未運行' }),
       ]),
       el('td', { class: 'actions', style: 'text-align:right;white-space:nowrap' }, [
+        el('button', { class: 'btn btn-sm', text: '🔗', title: '關聯到版本', onclick: () => linkCases([c.id]) }),
         el('button', { class: 'btn btn-sm', text: '執行', onclick: () => runCase(c, row) }),
         el('button', { class: 'btn btn-sm', text: '編輯', onclick: () => location.href = `/case-edit.html?id=${c.id}` }),
         el('button', { class: 'btn btn-sm btn-danger', text: '刪除', onclick: () => deleteCase(c) }),
@@ -194,6 +199,21 @@ async function runCase(c, row) {
     toast(e.message, 'err')
     btn.disabled = false
     btn.textContent = '執行'
+  }
+}
+
+/** 關聯版本：勾選的案例加入指定版本（幂等） */
+async function linkCases(ids) {
+  if (!ids.length) return toast('請先勾選案例', 'warn')
+  const version = await openVersionPicker({ title: `將 ${ids.length} 個案例加入版本`, selected: state.version || null, okText: '確認關聯' })
+  if (!version) return
+  try {
+    const r = await post('/api/cases/batch-link', { caseIds: ids, version })
+    toast(`已將 ${r.linked} 個案例加入版本 ${version}${r.skipped ? `，${r.skipped} 個已在此版本中` : ''}`, 'ok')
+    state.selected.clear()
+    await load()
+  } catch (e) {
+    toast(e.message, 'err')
   }
 }
 

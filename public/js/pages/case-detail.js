@@ -6,7 +6,7 @@
  */
 
 import { initLayout, loadMeta } from '../layout.js'
-import { get, post } from '../api.js'
+import { get, post, del } from '../api.js'
 import { esc, el, fmtTime, verdictBadge, statusBadge, stateTypeLabel, testTypeLabel, kindLabel, plausibilityLabel, isSecretHeader, maskSecret } from '../util.js'
 import { toast, confirmDialog, renderPagination, openModal } from '../components.js'
 import { renderRunResult } from '../views/diff-view.js'
@@ -45,6 +45,7 @@ function render() {
   const head = el('div', { class: 'detail-head' }, [
     el('span', { class: 'dh-title', text: c.name }),
     el('span', { class: 'dh-txn', text: c.txnCode }),
+    el('span', { class: 'badge badge-neutral mono', title: '案例編號為唯一標識', text: `#${c.id}` }),
     el('span', { innerHTML: statusBadge(c.status) }),
     el('span', { class: `badge ${c.stateType === 'STATEFUL' ? 'badge-info' : 'badge-neutral'}`, text: stateTypeLabel[c.stateType] }),
     el('span', { class: 'badge badge-neutral', text: c.type || 'Regular' }),
@@ -109,6 +110,21 @@ function configCard(c) {
   const env = state.env
   const ni = c.newInput
   const rows = []
+  // 關聯版本（可批量「加入版本」/ 此處取消關聯，不影響執行歷史）
+  const linkedVersions = c.versions || []
+  rows.push(el('div', { class: 'cfg-row' }, [
+    el('span', { class: 'cfg-label', text: '關聯版本' }),
+    el('div', { style: 'display:flex;gap:6px;flex-wrap:wrap;align-items:center' }, linkedVersions.length ? linkedVersions.map((code) => el('span', { class: 'badge badge-info mono', style: 'display:inline-flex;gap:2px;align-items:center' }, [
+      el('span', { text: code }),
+      el('button', {
+        class: 'link-x',
+        text: '✕',
+        title: '取消關聯',
+        onclick: () => unlinkVersion(code),
+      }),
+    ])) : [el('span', { class: 'muted', text: '未關聯任何版本' })]),
+    el('button', { class: 'btn btn-sm', text: '＋ 關聯版本', onclick: linkVersion }),
+  ]))
   rows.push(el('div', { class: 'cfg-row' }, [
     el('span', { class: 'cfg-label', text: '案例模式' }),
     el('span', { class: `badge ${c.mode === 'http' ? 'badge-info' : 'badge-warn'}`, text: c.mode === 'http' ? '獨立 HTTP 模式' : '對比模式（主機 vs 微服務系統）' }),
@@ -456,6 +472,34 @@ async function review(action) {
   try {
     await post(`/api/cases/${caseId}/review`, { action, comment })
     toast(action === 'approve' ? '已審核通過' : '已駁回', 'ok')
+    state.c = await get(`/api/cases/${caseId}`)
+    render()
+  } catch (e) {
+    toast(e.message, 'err')
+  }
+}
+
+/** 關聯版本：彈出版本選擇器 → 批量關聯接口（單案例） */
+async function linkVersion() {
+  const version = await openVersionPicker({ title: `關聯版本 — ${state.c.txnCode}`, okText: '確認關聯' })
+  if (!version) return
+  try {
+    const r = await post('/api/cases/batch-link', { caseIds: [state.c.id], version })
+    toast(`已關聯版本 ${version}${r.skipped ? '（已在此版本中）' : ''}`, 'ok')
+    state.c = await get(`/api/cases/${caseId}`)
+    render()
+  } catch (e) {
+    toast(e.message, 'err')
+  }
+}
+
+/** 取消關聯：從指定版本移除（不影響執行歷史與 runCount） */
+async function unlinkVersion(code) {
+  const ok = await confirmDialog({ title: '取消關聯', message: `將案例「${state.c.txnCode}」從版本 ${code} 移除關聯？執行歷史不會被刪除。`, okText: '移除' })
+  if (!ok) return
+  try {
+    await del(`/api/cases/${state.c.id}/versions/${code}`)
+    toast(`已取消關聯版本 ${code}`, 'ok')
     state.c = await get(`/api/cases/${caseId}`)
     render()
   } catch (e) {

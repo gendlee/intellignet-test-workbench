@@ -110,12 +110,12 @@ const DIFF_RULES = {
 
 /** 案例定義（profile 對應 generators.js 的差異場景；type=案例類型，testType=測試類型 SIT/UAT） */
 const CASE_SPECS = [
-  { txnCode: 'ACCT1001', name: '帳戶查詢 — 基本成功', module: '帳戶查詢', req: REQ.account, profile: 'pass', stateType: 'STATELESS', status: 'APPROVED', type: 'Regular', testType: 'SIT' },
-  { txnCode: 'ACCT1002', name: '帳戶查詢 — 時間格式差異', module: '帳戶查詢', req: REQ.account, profile: 'diff-time', stateType: 'STATELESS', status: 'APPROVED', type: 'Regular', testType: 'SIT' },
-  { txnCode: 'ACCT1003', name: '帳戶查詢 — 餘額不一致', module: '帳戶查詢', req: REQ.account, profile: 'diff-amount', stateType: 'STATELESS', status: 'APPROVED', type: 'Boundaries', testType: 'SIT' },
-  { txnCode: 'ACCT1004', name: '交易明細查詢 — 字段重命名', module: '交易明細', req: REQ.txn, profile: 'diff-renamed', stateType: 'STATEFUL', status: 'APPROVED', precondition: '需先執行開戶 ACCT0001 並產生至少 1 筆交易', type: 'Regular', testType: 'SIT' },
-  { txnCode: 'ACCT1005', name: '交易明細查詢 — 數組長度差異', module: '交易明細', req: REQ.txn, profile: 'diff-array-len', stateType: 'STATELESS', status: 'APPROVED', type: 'Boundaries', testType: 'UAT' },
-  { txnCode: 'PAYM2001', name: '轉賬 — 微服務系統新增字段', module: '轉賬', req: REQ.pay, profile: 'diff-added-field', stateType: 'STATEFUL', status: 'APPROVED', precondition: '需先完成轉賬授權簽核', type: 'ECC', testType: 'UAT' },
+  { txnCode: 'ACCT1001', name: '帳戶查詢 — 基本成功', module: '帳戶查詢', req: REQ.account, profile: 'pass', stateType: 'STATELESS', status: 'APPROVED', type: 'Regular', testType: 'SIT', versions: ['202611A', '202612A'] },
+  { txnCode: 'ACCT1002', name: '帳戶查詢 — 時間格式差異', module: '帳戶查詢', req: REQ.account, profile: 'diff-time', stateType: 'STATELESS', status: 'APPROVED', type: 'Regular', testType: 'SIT', versions: ['202611A'] },
+  { txnCode: 'ACCT1003', name: '帳戶查詢 — 餘額不一致', module: '帳戶查詢', req: REQ.account, profile: 'diff-amount', stateType: 'STATELESS', status: 'APPROVED', type: 'Boundaries', testType: 'SIT', versions: ['202611Z'] },
+  { txnCode: 'ACCT1004', name: '交易明細查詢 — 字段重命名', module: '交易明細', req: REQ.txn, profile: 'diff-renamed', stateType: 'STATEFUL', status: 'APPROVED', precondition: '需先執行開戶 ACCT0001 並產生至少 1 筆交易', type: 'Regular', testType: 'SIT', versions: ['202611A'] },
+  { txnCode: 'ACCT1005', name: '交易明細查詢 — 數組長度差異', module: '交易明細', req: REQ.txn, profile: 'diff-array-len', stateType: 'STATELESS', status: 'APPROVED', type: 'Boundaries', testType: 'UAT', versions: ['202611Z'] },
+  { txnCode: 'PAYM2001', name: '轉賬 — 微服務系統新增字段', module: '轉賬', req: REQ.pay, profile: 'diff-added-field', stateType: 'STATEFUL', status: 'APPROVED', precondition: '需先完成轉賬授權簽核', type: 'ECC', testType: 'UAT', versions: ['202611A'] },
   { txnCode: 'PAYM2002', name: '轉賬 — 微服務系統缺少字段', module: '轉賬', req: REQ.pay, profile: 'diff-missing-field', stateType: 'STATEFUL', status: 'PENDING', precondition: '需先完成轉賬授權簽核', type: 'ExceptionHandling', testType: 'UAT' },
   { txnCode: 'LOAN3001', name: '貸款餘額查詢 — 精度差異', module: '貸款查詢', req: REQ.loan, profile: 'diff-precision', stateType: 'STATELESS', status: 'APPROVED', type: 'Boundaries', testType: 'SIT' },
   { txnCode: 'LOAN3002', name: '貸款明細 — 長數字精度風險', module: '貸款查詢', req: REQ.loan, profile: 'diff-longnum', stateType: 'STATELESS', status: 'APPROVED', type: 'ExceptionHandling', testType: 'SIT' },
@@ -202,6 +202,7 @@ export function seedDB(db) {
       profile: s.profile,
       type: s.type || 'Regular',        // Regular / ECC / ExceptionHandling / Boundaries
       testType: s.testType || 'SIT',    // SIT（SIT1/SIT3） / UAT（USMK/USMF）
+      versions: s.versions || [],       // 顯式關聯的版本號列表（批量「加入版本」）
       hostInput: { rawXml },
       newInput: { ...ai, refinedByHuman: false },
       aiMeta: { source: 'ai', generatedAt: isoAt(daysAgo(9, 9)), refinedByHuman: false },

@@ -8,8 +8,8 @@ import { get } from '../api.js'
 import { el } from '../util.js'
 import { openModal } from '../components.js'
 
-/** 彈出版本選擇；返回選中的版本 code（取消返回 null）。selected 指定預選版本 */
-export async function openVersionPicker({ title = '選擇執行版本', selected = null } = {}) {
+/** 彈出版本選擇；返回選中的版本 code（取消返回 null）。selected 指定預選版本，okText 指定確認按鈕文案 */
+export async function openVersionPicker({ title = '選擇執行版本', selected = null, okText = '開始執行' } = {}) {
   let versions = []
   try {
     const res = await get('/api/versions')
@@ -38,7 +38,7 @@ export async function openVersionPicker({ title = '選擇執行版本', selected
     el('div', { class: 'muted', style: 'font-size:12px;margin-top:8px', text: '版本號格式 YYYYMM + A/Z：202611A = 2026年11月集中版本、202611Z = 2026年11月非集中版本；在「案例中心 → 版本管理」維護，預生成三年每月各一。' }),
   ])
   return new Promise((resolve) => {
-    const okBtn = el('button', { class: 'btn btn-primary', text: '開始執行', onclick: () => { close(); resolve(sel.value) } })
+    const okBtn = el('button', { class: 'btn btn-primary', text: okText, onclick: () => { close(); resolve(sel.value) } })
     const cancelBtn = el('button', { class: 'btn', text: '取消', onclick: () => { close(); resolve(null) } })
     const { close } = openModal({ title, body, foot: [cancelBtn, okBtn] })
   })

@@ -266,19 +266,38 @@
 ```json
 { "code": 0, "message": "ok", "data": [
   { "id": "V0001", "code": "202611A", "month": "202611", "mode": "A", "modeLabel": "集中版本", "createdAt": "2026-08-26T03:30:00.000Z",
-    "runCount": 5, "executedCaseCount": 3 }
+    "runCount": 5, "executedCaseCount": 3, "linkedCaseCount": 4, "caseCount": 5 }
 ] }
 ```
 
-- `GET /api/versions` 返回全部版本，按 `code` 倒序（最新在前）；`runCount` = 該版本執行總次數、`executedCaseCount` = 該版本執行過的去重案例數（前端「版本管理」頁的「執行記錄」鏈接跳轉 `cases.html?version=<code>` 回溯歷史執行）。
+- `GET /api/versions` 返回全部版本，按 `code` 倒序（最新在前）；統計欄位：
+  - `runCount` = 該版本執行總次數、`executedCaseCount` = 執行過的去重案例數
+  - `linkedCaseCount` = **顯式關聯**的案例數（案例 `versions` 陣列，見 `POST /api/cases/batch-link`）
+  - `caseCount` = 關聯 ∪ 執行 的去重案例數（前端「版本管理」頁「執行記錄」鏈接以 `caseCount` 計數，跳轉 `cases.html?version=<code>` 回溯）
 - `POST /api/versions` 請求 `{month: "YYYY-MM", mode: "A"|"Z"}` → 生成 `code = YYYYMM + mode`；月份格式非法或版本號已存在返回 4000。
 - `DELETE /api/versions/{id}` 刪除版本（僅影響版本列表，不追溯歷史運行）。
 - 執行案例（單條/批量）時傳 `{version: "202611A"}`，運行記錄帶 `version` 欄位；版本不存在返回 4000。詳見 `POST /api/cases/{id}/run` 與 `POST /api/batch-runs`。
 
+### POST /api/cases/batch-link（批量關聯版本，需求：批量選中案例加入版本）
+
+請求：`{ "caseIds": ["C0001", "C0002"], "version": "202611A" }`
+
+- 將選中的案例**顯式關聯**到指定版本（寫入案例的 `versions` 陣列）；**冪等**：重複關聯自動跳過，返回 `{ linked, skipped, version }`。
+- `version` 不存在返回 4000「版本號 X 不存在，請先到案例中心維護」；`caseIds` 為空返回 4000「請先勾選案例」。
+- 前端入口：「案例管理」批量勾選後的「🔗 加入版本」工具列按鈕、單行「🔗」按鈕、案例詳情「＋ 關聯版本」。
+
+### DELETE /api/cases/{id}/versions/{code}（取消關聯版本）
+
+- 將案例從指定版本移除（`versions` 陣列過濾）；**不影響執行歷史**（執行過的案例仍會出現在該版本的篩選結果中）。
+- 案例不存在返回 4040「案例不存在」；未關聯該版本返回 4040「案例未關聯版本 X」。
+
 ### GET /api/cases（案例列表，含版本篩選）
 
-- 查詢參數新增 `version`（可選）：僅返回在該版本下執行過的案例（`version` 對應的運行記錄去重），用於回溯歷史執行；「案例管理」頁預設選中最新版本號。
-- 案例新增欄位：
+- 查詢參數新增 `version`（可選）：僅返回**關聯了該版本 ∪ 在該版本下執行過**的案例（`c.versions` 包含 or 對應運行記錄去重），用於回溯歷史執行與版本關聯管理；「案例管理」頁預設選中最新版本號。
+- `keyword` 同時匹配名稱、交易碼與**案例編號**（`id`，如 `C0073`）。
+- 案例唯一標識為**案例編號**（系統生成的 `C` 開頭 `id`）；**交易碼可維護**（`POST/PUT` 均允許重複，不再唯一校驗）。
+- 案例欄位：
+  - `versions`: 顯式關聯的版本號陣列（`[]` 表示未關聯）
   - `type`: 案例類型（預設 `Regular`），**可擴展維護**——取值對照 `/api/case-types` 列表（「案例中心 → 案例類型」），非法類型返回 4000「案例類型「X」不存在，請先到「案例中心 → 案例類型」維護」
   - `testType`: `SIT` | `UAT`（測試類型，預設 `SIT`；SIT 涵蓋 SIT1/SIT3、UAT 涵蓋 USMK/USMF 環境，前端展示 `SIT（SIT1 · SIT3）`）
 - 運行記錄（`POST /api/cases/{id}/run`、`GET /api/cases/{id}/runs`、`GET /api/runs/{id}`）均攜帶 `caseType` / `testType`，在執行結果中體現。

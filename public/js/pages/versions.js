@@ -30,16 +30,16 @@ function renderTable(versions) {
       el('td', {}, [el('span', { class: 'mono', style: 'font-weight:700;font-size:13px;color:var(--brand)', text: v.code })]),
       el('td', { class: 'mono', text: `${v.month.slice(0, 4)}-${v.month.slice(4)}` }),
       el('td', {}, [el('span', { class: 'badge ' + (v.mode === 'A' ? 'badge-ok' : 'badge-neutral'), text: v.mode === 'A' ? '集中版本' : '非集中版本' })]),
-      // 執行記錄：可跳轉案例管理回溯該版本執行過的案例
+      // 關聯/執行記錄：可跳轉案例管理回溯該版本關聯或執行過的案例
       el('td', {}, [
-        v.executedCaseCount
+        v.caseCount
           ? el('a', {
               class: 'exec-link',
               href: `/cases.html?version=${v.code}`,
-              title: `該版本下執行過的案例（${v.executedCaseCount} 個案例 · ${v.runCount} 次執行）`,
-              text: `${v.executedCaseCount} 案例 · ${v.runCount} 次執行 →`,
+              title: `該版本關聯 ${v.linkedCaseCount} 個案例、執行過 ${v.executedCaseCount} 個案例（共 ${v.caseCount} 個 · ${v.runCount} 次執行）`,
+              text: `${v.caseCount} 案例 · ${v.runCount} 次執行 →`,
             })
-          : el('span', { class: 'muted', text: '暫無執行' }),
+          : el('span', { class: 'muted', text: '暫無關聯/執行' }),
       ]),
       el('td', { class: 'muted', style: 'white-space:nowrap', text: fmtTime(v.createdAt) }),
       el('td', {}, [el('button', {

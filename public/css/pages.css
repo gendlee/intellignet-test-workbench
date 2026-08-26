@@ -139,6 +139,8 @@
 }
 /* 版本管理頁「執行記錄」跳轉鏈接 */
 .exec-link { font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.link-x { border: none; background: none; color: var(--muted, #8a8a8a); cursor: pointer; font-size: 11px; line-height: 1; padding: 1px 3px; border-radius: 3px; }
+.link-x:hover { color: var(--danger, #c0392b); background: rgba(192, 57, 43, .08); }
 /* 可點擊節點（待審核）：hover 高亮 + 右上角提示徽標 */
 .lc-clickable {
   cursor: pointer; text-decoration: none; position: relative;
