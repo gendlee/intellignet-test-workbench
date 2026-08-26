@@ -7,7 +7,7 @@
 
 import { initLayout, loadMeta } from '../layout.js'
 import { get, post } from '../api.js'
-import { esc, el, fmtTime, verdictBadge, statusBadge, stateTypeLabel, kindLabel, plausibilityLabel } from '../util.js'
+import { esc, el, fmtTime, verdictBadge, statusBadge, stateTypeLabel, kindLabel, plausibilityLabel, isSecretHeader, maskSecret } from '../util.js'
 import { toast, confirmDialog, renderPagination, openModal } from '../components.js'
 import { renderRunResult } from '../views/diff-view.js'
 import { exportCaseWord } from '../views/word-export.js'
@@ -130,7 +130,7 @@ function configCard(c) {
     if (headers.length) {
       rows.push(el('div', { class: 'cfg-row' }, [
         el('span', { class: 'cfg-label', text: '請求頭' }),
-        el('div', { class: 'cfg-kv' }, headers.map((h) => el('code', { class: 'cfg-code', text: `${h.name}: ${h.value}` }))),
+        el('div', { class: 'cfg-kv' }, headers.map((h) => el('code', { class: 'cfg-code', text: `${h.name}: ${isSecretHeader(h) ? maskSecret(h.value) : h.value}` }))),
       ]))
     }
     if (ni.body) {

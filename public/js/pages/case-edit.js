@@ -8,7 +8,7 @@
 
 import { initLayout } from '../layout.js'
 import { get, post, put } from '../api.js'
-import { el } from '../util.js'
+import { el, isSecretHeader, maskSecret } from '../util.js'
 import { openModal, toast } from '../components.js'
 import { parseRows, serializeRows, renderFieldForm } from '../views/field-editor.js'
 
@@ -341,17 +341,32 @@ function fillNewInput() {
 }
 
 function headerRow(h, i) {
-  return el('div', { class: 'header-row', style: 'grid-template-columns:190px 1fr 34px;margin-bottom:6px' }, [
+  const secret = isSecretHeader(h)
+  let reveal = false
+  const valInput = el('input', {
+    class: 'input', style: 'font-family:var(--mono);font-size:12px',
+    value: secret ? maskSecret(h.value) : h.value, placeholder: '值',
+    readOnly: secret,
+    title: secret ? '密鑰欄位，已脫敏顯示' : '',
+    oninput: (e) => (state.newInput.headers[i].value = e.target.value),
+  })
+  const eye = el('button', {
+    class: 'btn btn-sm btn-ghost', text: '👁', title: '顯示 / 隱藏密鑰',
+    style: secret ? '' : 'visibility:hidden',
+    onclick: () => {
+      reveal = !reveal
+      valInput.value = reveal ? h.value : maskSecret(h.value)
+      valInput.readOnly = !reveal
+    },
+  })
+  return el('div', { class: 'header-row', style: 'grid-template-columns:190px 1fr 28px 28px;margin-bottom:6px' }, [
     el('input', {
       class: 'input', style: 'font-family:var(--mono);font-size:12px',
       value: h.name, placeholder: '名稱',
       oninput: (e) => (state.newInput.headers[i].name = e.target.value),
     }),
-    el('input', {
-      class: 'input', style: 'font-family:var(--mono);font-size:12px',
-      value: h.value, placeholder: '值',
-      oninput: (e) => (state.newInput.headers[i].value = e.target.value),
-    }),
+    valInput,
+    eye,
     el('button', {
       class: 'btn btn-sm btn-ghost', text: '✕',
       onclick: () => { state.newInput.headers.splice(i, 1); fillNewInput() },

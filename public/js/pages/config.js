@@ -8,7 +8,7 @@
 
 import { initLayout, loadMeta } from '../layout.js'
 import { get, put } from '../api.js'
-import { el } from '../util.js'
+import { el, maskSecret } from '../util.js'
 import { toast } from '../components.js'
 
 let rootEl
@@ -171,17 +171,34 @@ function renderDefaultHeaders() {
   const rows = el('div', {}, headers.map((h, i) => headerRow(h, i)))
 
   function headerRow(h, i) {
+    const secret = !!h.secret
+    let reveal = false
+    const valInput = el('input', {
+      class: 'input mono', style: 'flex:1;min-width:0', placeholder: '值',
+      value: secret ? maskSecret(h.value) : h.value,
+      disabled: config.readOnly, readOnly: secret,
+      title: secret ? '密鑰欄位，已脫敏顯示' : '',
+      oninput: (e) => { h.value = e.target.value },
+    })
+    const eye = el('button', {
+      class: 'btn btn-sm btn-ghost', text: '👁', title: '顯示 / 隱藏密鑰',
+      style: secret ? '' : 'visibility:hidden',
+      onclick: () => {
+        reveal = !reveal
+        valInput.value = reveal ? h.value : maskSecret(h.value)
+        valInput.readOnly = !reveal || config.readOnly
+      },
+    })
     return el('div', { class: 'header-row' }, [
       el('input', {
         class: 'input', placeholder: 'Header 名稱', value: h.name,
         disabled: config.readOnly,
         oninput: (e) => { h.name = e.target.value.trim() },
       }),
-      el('input', {
-        class: 'input mono', placeholder: '值', value: h.value,
-        disabled: config.readOnly,
-        oninput: (e) => { h.value = e.target.value },
-      }),
+      el('div', { class: 'flex', style: 'gap:4px;min-width:0' }, [
+        el('div', { style: 'flex:1;min-width:0;display:flex' }, [valInput]),
+        eye,
+      ]),
       el('label', { class: 'switch', title: '啟用' }, [
         el('input', { type: 'checkbox', checked: h.enabled, disabled: config.readOnly, onchange: (e) => { h.enabled = e.target.checked } }),
         el('span', { class: 'slider' }),

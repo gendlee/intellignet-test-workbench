@@ -102,6 +102,20 @@ export function semanticDiff(text, other) {
   ).join('\n')
 }
 
+/** 密鑰脫敏：保留前 4 字符，其餘以 • 掩蓋；過短或空值全掩蓋 */
+export function maskSecret(v) {
+  if (!v) return ''
+  const s = String(v)
+  return s.length <= 6 ? '••••••' : s.slice(0, 4) + '••••••'
+}
+
+const SECRET_HEADER_RE = /key|secret|token|passwd|password|apikey/i
+
+/** 判斷請求頭是否為敏感欄位（顯式 secret 標記或名稱含 key/secret/token/password） */
+export function isSecretHeader(h) {
+  return !!(h && (h.secret === true || SECRET_HEADER_RE.test(String(h.name || ''))))
+}
+
 function longestCommonSeq(a, b) {
   const n = a.length, m = b.length
   if (!n || !m) return []
