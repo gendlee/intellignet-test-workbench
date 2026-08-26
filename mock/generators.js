@@ -45,10 +45,10 @@ export function iso(d = new Date()) {
 
 /**
  * @param {string} hostXml 主機請求 XML
- * @param {object} ctx { urlTemplate, defaultHeaders }
+ * @param {object} ctx { urlTemplate, defaultHeaders, envBaseUrl }
  * @returns {object} newInput { url, method, headers, body }
  */
-export function aiGenerate(hostXml, { urlTemplate = [], defaultHeaders = [] } = {}) {
+export function aiGenerate(hostXml, { urlTemplate = [], defaultHeaders = [], envBaseUrl = '' } = {}) {
   let root
   try {
     root = parseXML(hostXml)
@@ -59,12 +59,11 @@ export function aiGenerate(hostXml, { urlTemplate = [], defaultHeaders = [] } = 
   const txnCode = findTxnCode(root)
   const modulePath = camel(root.tag)
 
-  // URL：固定段 + 差異段（配置值）→ 附加模組路徑/交易碼
-  const base = urlTemplate
-    .filter((s) => s && s.value)
-    .map((s) => s.value.replace(/\/+$/, ''))
-    .join('/')
-  const url = `${base}/${modulePath}/${txnCode}`
+  // URL：環境 baseUrl（存在時取代模板首段，即主機段）+ 其餘模板段 → 附加模組路徑/交易碼
+  const segs = urlTemplate.filter((s) => s && s.value).map((s) => s.value.replace(/\/+$/, ''))
+  const base = (envBaseUrl || segs[0] || '').replace(/\/+$/, '')
+  const rest = (envBaseUrl ? segs.slice(1) : segs.slice(0)).join('/')
+  const url = `${base}/${rest}/${modulePath}/${txnCode}`.replace(/([^:])\/+/g, '$1/')
 
   const body = elToJson(root)
   return {
@@ -231,20 +230,69 @@ function renderNew(m) {
 /* ---------- 案例執行 ---------- */
 
 /**
- * 執行單條案例 → 完整 Run（含 diff，與前端展示同一演算法）
+ * 執行單條案例 → 完整 Run
+ * - compare 模式（mode!=='http'）：主機 vs 新系統輸出，走 shared/diff 比對（與前端同一演算法）
+ * - http 模式（mode==='http'）：單獨 HTTP 請求，verdict 按 HTTP 狀態碼（2xx=PASS），無 diff
+ * 兩種模式都輸出 steps（執行過程步驟，供詳情頁時間線展示）
  */
 export function runCase(c, { config = null, type = 'SINGLE', batchId = null, runBy = '測試工程師 陳', runIndex = 0, at = null } = {}) {
   const startedAt = at || new Date().toISOString()
   const hRng = rng(hash(c.id + 'h' + runIndex))
   const nRng = rng(hash(c.id + 'n' + runIndex))
+  const httpMode = c.mode === 'http'
+
+  if (httpMode) {
+    const httpStatus = c.profile === 'http-fail' ? 500 : 200
+    const rawBody = c.profile === 'http-fail' ? '{"code":5000,"message":"內部服務器錯誤"}' : buildNewResponse(c)
+    const latency = 60 + Math.floor(nRng() * 150)
+    const verdict = httpStatus >= 200 && httpStatus < 300 ? 'PASS' : 'FAIL'
+    const steps = [
+      { name: '準備請求', status: 'ok', ms: 4 + Math.floor(nRng() * 8), detail: `${c.newInput?.method || 'POST'} ${c.newInput?.url || ''}` },
+      { name: '發送請求', status: 'ok', ms: latency, detail: `HTTP ${httpStatus}` },
+      { name: '解析響應', status: 'ok', ms: 6 + Math.floor(nRng() * 10), detail: `${String(rawBody).length} 字元` },
+      { name: '判定', status: verdict === 'PASS' ? 'ok' : 'fail', ms: 1, detail: verdict === 'PASS' ? 'HTTP 2xx，執行成功' : `HTTP 非 2xx（${httpStatus}），執行失敗` },
+    ]
+    return {
+      id: nextId('R'),
+      caseId: c.id,
+      batchId,
+      type,
+      inputSnapshot: {
+        hostXml: '',
+        newInput: c.newInput || null,
+      },
+      hostResult: null,
+      newResult: { httpStatus, latencyMs: latency, rawBody },
+      diff: null,
+      verdict,
+      steps,
+      stateNote: c.precondition || null,
+      runBy,
+      startedAt,
+      finishedAt: new Date(Date.parse(startedAt) + 80 + latency + Math.floor(nRng() * 300)).toISOString(),
+    }
+  }
+
   const hostBody = buildHostResponse(c)
   const newBody = buildNewResponse(c)
+  const hostLatency = 80 + Math.floor(hRng() * 200)
+  const newLatency = 60 + Math.floor(nRng() * 150)
 
   const diff = compare(hostBody, newBody, {
     stateType: c.stateType,
     rules: config?.diffRules || {},
     extraMeta: { stateNote: c.precondition || '', caseName: c.name, txnCode: c.txnCode },
   })
+
+  const steps = [
+    { name: '準備請求', status: 'ok', ms: 4 + Math.floor(hRng() * 8), detail: `主機報文 ${String(c.hostInput?.rawXml || '').length} 字元` },
+    { name: '發送主機請求', status: 'ok', ms: hostLatency, detail: `HTTP 200` },
+    { name: '解析主機響應', status: 'ok', ms: 6 + Math.floor(hRng() * 10), detail: `${String(hostBody).length} 字元` },
+    { name: '發送新系統請求', status: 'ok', ms: newLatency, detail: `HTTP 200 · ${c.newInput?.url || ''}` },
+    { name: '解析新系統響應', status: 'ok', ms: 6 + Math.floor(nRng() * 10), detail: `${String(newBody).length} 字元` },
+    { name: '字段比對', status: 'ok', ms: 3 + Math.floor(nRng() * 12), detail: `發現 ${diff.items.length} 處差異` },
+    { name: '判定', status: diff.verdict === 'PASS' ? 'ok' : 'warn', ms: 1, detail: diff.verdict === 'PASS' ? '兩側輸出一致，通過' : diff.verdict === 'DIFF' ? '存在差異，需人工評估' : '存在高可疑差異，判定失敗' },
+  ]
 
   return {
     id: nextId('R'),
@@ -255,9 +303,10 @@ export function runCase(c, { config = null, type = 'SINGLE', batchId = null, run
       hostXml: c.hostInput?.rawXml || '',
       newInput: c.newInput || null,
     },
-    hostResult: { httpStatus: 200, latencyMs: 80 + Math.floor(hRng() * 200), rawBody: hostBody },
-    newResult: { httpStatus: 200, latencyMs: 60 + Math.floor(nRng() * 150), rawBody: newBody },
+    hostResult: { httpStatus: 200, latencyMs: hostLatency, rawBody: hostBody },
+    newResult: { httpStatus: 200, latencyMs: newLatency, rawBody: newBody },
     diff,
+    steps,
     verdict: diff.verdict,
     stateNote: c.precondition || null,
     runBy,

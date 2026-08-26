@@ -37,11 +37,71 @@ function render() {
       el('div', { class: 'section-title', style: 'margin:0', text: '系統配置' }),
       el('span', { class: 'count', text: `${config.systemId} · ${readOnly ? '只讀' : '可編輯'}` }),
     ]),
+    renderEnvironments(),
     renderUrlTemplate(),
     renderDefaultHeaders(),
     renderDiffRules(),
     renderPermission(),
   )
+}
+
+/* ---------- 0. 環境變量（需求 9） ---------- */
+
+function renderEnvironments() {
+  const envs = config.environments || []
+  const rows = el('div', {})
+  const renderRows = () => {
+    rows.replaceChildren(...envs.map((e, i) => el('div', { class: 'env-row' }, [
+      el('input', {
+        class: 'input mono', style: 'width:90px', value: e.id,
+        placeholder: 'ID', disabled: e.current || config.readOnly,
+        oninput: (ev) => { e.id = ev.target.value.trim() },
+      }),
+      el('input', {
+        class: 'input', style: 'width:190px', value: e.name,
+        placeholder: '環境名稱', disabled: config.readOnly,
+        oninput: (ev) => { e.name = ev.target.value.trim() },
+      }),
+      el('input', {
+        class: 'input mono', style: 'flex:1', value: e.baseUrl,
+        placeholder: 'https://…', disabled: config.readOnly,
+        oninput: (ev) => { e.baseUrl = ev.target.value.trim() },
+      }),
+      el('label', { class: 'flex', style: 'gap:6px;align-items:center;font-size:12px;cursor:pointer;white-space:nowrap' }, [
+        el('input', {
+          type: 'radio', name: 'env-cur', checked: !!e.current, disabled: config.readOnly,
+          onchange: () => { envs.forEach((x) => (x.current = false)); e.current = true; renderRows() },
+        }),
+        el('span', { text: '設為當前' }),
+      ]),
+      el('button', {
+        class: 'btn btn-sm btn-danger', text: '✕', title: '刪除環境',
+        disabled: envs.length <= 1 || config.readOnly,
+        onclick: () => { envs.splice(i, 1); renderRows() },
+      }),
+    ])))
+  }
+  renderRows()
+  return el('div', { class: 'card', style: 'padding:18px' }, [
+    el('div', { class: 'section-title' }, [el('span', { text: '環境變量' }),
+      el('span', { class: 'count', text: 'SIT1 / SIT3 / USMK / USMF — 全域當前環境（AI 生成與案例執行使用）' })]),
+    rows,
+    el('div', { class: 'flex', style: 'margin-top:12px' }, [
+      el('button', {
+        class: 'btn btn-sm', text: '＋ 新增環境', disabled: config.readOnly,
+        onclick: () => { envs.push({ id: '', name: '', baseUrl: '', current: envs.length === 0 }); renderRows() },
+      }),
+      el('span', { class: 'spacer' }),
+      el('button', { class: 'btn btn-primary btn-sm', text: '保存環境', onclick: saveEnvs }),
+    ]),
+  ])
+  async function saveEnvs() {
+    try {
+      await put('/api/config', { environments: envs })
+      toast('環境變量已保存', 'ok')
+      await load()
+    } catch (e) { toast(e.message, 'err') }
+  }
 }
 
 /* ---------- 1. URL 模板 ---------- */
@@ -258,7 +318,7 @@ function renderPermission() {
 
   return el('div', { class: 'card', style: 'padding:18px' }, [
     el('div', { class: 'section-title' }, [el('span', { text: '權限與系統' }),
-      el('span', { class: 'count', text: '需求9：EBP-CL 接入權限展示位（當前環境示範）' })]),
+      el('span', { class: 'count', text: 'EBP-CL 接入權限與功能開關（當前環境示範）' })]),
     el('div', { class: 'form-grid', style: 'margin-top:6px' }, [
       el('div', { class: 'field-row' }, [
         el('label', { class: 'field', text: '當前用戶' }),

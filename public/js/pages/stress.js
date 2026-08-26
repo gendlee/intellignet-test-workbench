@@ -1,5 +1,6 @@
 /**
- * 壓力測試頁：計劃 CRUD、啟動執行（輪詢）、結果曲線圖表、運行歷史
+ * 壓力測試頁：計劃 CRUD、審批流程（pending → approved/rejected → running → done）、
+ * 計劃詳情抽屜（配置 + 審批 + 運行歷史 + 最近曲線）、啟動執行（輪詢）、結果曲線圖表
  * 曲線：TPS / 延遲（P50）/ 錯誤率 三圖；KPI：TPS、平均延遲、P50-P99、錯誤率、總請求
  */
 
@@ -43,8 +44,9 @@ function renderPlanTable() {
         ])]),
         el('tbody', {}, state.plans.map((p) => {
           const lr = p.lastRun
+          const canRun = p.status === 'approved' || p.status === 'done'
           return el('tr', {}, [
-            el('td', {}, [el('b', { text: p.name })]),
+            el('td', {}, [el('button', { class: 'plan-name', text: p.name, title: '點擊查看計劃詳情', onclick: () => openPlanDetail(p) })]),
             el('td', {}, [el('span', { class: 'mono', style: 'font-size:11.5px;color:var(--text-2)', text: `${p.method} ${shortUrl(p.url)}` })]),
             el('td', { class: 'num', text: `${p.concurrency}` }),
             el('td', { class: 'num', text: `${p.durationSec}s` }),
@@ -59,9 +61,11 @@ function renderPlanTable() {
               el('button', {
                 class: 'btn btn-sm btn-primary',
                 text: p.status === 'running' ? '運行中…' : '▶ 啟動',
-                disabled: p.status === 'running',
+                disabled: p.status === 'running' || !canRun,
+                title: canRun || p.status === 'running' ? '' : '計劃需審批通過後才可啟動',
                 onclick: () => startRun(p),
               }),
+              el('button', { class: 'btn btn-sm', text: '詳情', onclick: () => openPlanDetail(p) }),
               el('button', { class: 'btn btn-sm', text: '結果', onclick: () => showResult(p), disabled: !lr }),
               el('button', { class: 'btn btn-sm', text: '編輯', onclick: () => openPlanModal(p) }),
               el('button', { class: 'btn btn-sm btn-danger', text: '刪除', onclick: () => deletePlan(p) }),
@@ -75,7 +79,13 @@ function renderPlanTable() {
 }
 
 function statusBadge(s) {
-  const map = { idle: ['badge-neutral', '待命'], running: ['badge-info', '運行中'], done: ['badge-ok', '已完成'] }
+  const map = {
+    pending: ['badge-warn', '待審批'],
+    approved: ['badge-info', '已批准'],
+    rejected: ['badge-danger', '已駁回'],
+    running: ['badge-info', '運行中'],
+    done: ['badge-ok', '已完成'],
+  }
   const [cls, label] = map[s] || ['badge-neutral', s]
   return el('span', { class: `badge ${cls}`, text: label })
 }
@@ -87,6 +97,101 @@ function shortUrl(u) {
   } catch {
     return u.length > 50 ? u.slice(0, 50) + '…' : u
   }
+}
+
+/* ---------- 計劃詳情抽屜（需求 8） ---------- */
+
+async function openPlanDetail(plan) {
+  const mask = el('div', { class: 'drawer-mask', onclick: close })
+  const drawer = el('div', { class: 'drawer' })
+  const head = el('div', { class: 'drawer-head' }, [
+    el('span', { class: 'plan-name', text: plan.name, style: 'font-size:inherit' }),
+    el('span', { class: 'spacer' }),
+    el('button', { class: 'modal-close', text: '✕', onclick: close }),
+  ])
+  const body = el('div', { class: 'drawer-body' })
+  const foot = el('div', { class: 'drawer-foot' }, [
+    el('button', { class: 'btn', text: '關閉', onclick: close }),
+  ])
+  drawer.append(head, body, foot)
+  document.body.append(mask, drawer)
+
+  function close() { mask.remove(); drawer.remove() }
+
+  // 計劃配置
+  const cfgRow = (label, val) => el('div', { class: 'cfg-row' }, [
+    el('span', { class: 'cfg-label', text: label }),
+    typeof val === 'string' ? el('code', { class: 'cfg-code', text: val }) : val,
+  ])
+  body.append(
+    el('div', { class: 'section-title', style: 'margin-top:0' }, [
+      el('span', { text: '計劃配置' }),
+      el('span', { class: 'count', text: plan.id }),
+    ]),
+    el('div', {}, [
+      cfgRow('狀態', statusBadge(plan.status)),
+      cfgRow('接口', `${plan.method} ${plan.url}`),
+      cfgRow('並發', `${plan.concurrency} · 時長 ${plan.durationSec}s · Ramp-up ${plan.rampUpSec}s`),
+      cfgRow('創建', `${plan.createdBy} · ${fmtTime(plan.createdAt)}`),
+      cfgRow('執行次數', `${plan.runCount || 0} 次`),
+    ]),
+    el('div', { class: 'section-title', style: 'margin-top:20px' }, [el('span', { text: '審批狀態' })]),
+    renderApproval(plan, close),
+    el('div', { class: 'section-title', style: 'margin-top:20px' }, [el('span', { text: '最近運行' })]),
+    plan.lastRun
+      ? el('div', { id: 'drawer-run' })
+      : el('div', { class: 'empty', text: '尚未執行過' }),
+  )
+  // 最近曲線
+  if (plan.lastRun) {
+    const box = document.getElementById('drawer-run')
+    box.append(el('div', { class: 'flex', style: 'gap:8px;margin-bottom:10px' }, [
+      el('span', { class: 'badge badge-info', text: `${plan.lastRun.summary.tps} TPS` }),
+      el('span', { class: 'badge badge-neutral', text: `延遲 ${plan.lastRun.summary.avgLatencyMs}ms · 錯誤率 ${plan.lastRun.summary.errorRate}%` }),
+      el('span', { class: 'muted', style: 'font-size:11.5px', text: `${fmtTime(plan.lastRun.startedAt, true)} → ${fmtTime(plan.lastRun.finishedAt, true)}` }),
+    ]))
+    try {
+      const run = await get(`/api/stress/runs/${plan.lastRun.id}`)
+      if (run?.series?.length) {
+        box.append(el('div', { class: 'chart-box' }, [
+          el('div', { class: 'chart-title', text: '吞吐量（TPS）' }),
+          el('div', { innerHTML: lineChart({ labels: run.series.map((x) => `${x.tSec}s`), series: [{ name: 'TPS', data: run.series.map((x) => x.tps) }], colors: ['#b3002d'] }) }),
+        ]))
+      }
+    } catch { /* 曲線載入失敗不阻塞 */ }
+  }
+}
+
+/** 審批區：pending 顯示審批按鈕，其餘顯示審批意見（需求 11）；審批成功後關閉抽屜 */
+function renderApproval(plan, close) {
+  const box = el('div', {})
+  if (plan.status === 'pending') {
+    const comment = el('input', { class: 'input', id: 'ap-comment', placeholder: '審批意見（可選）', style: 'margin-bottom:10px;width:100%' })
+    const doReview = async (action) => {
+      try {
+        await post(`/api/stress/plans/${plan.id}/review`, { action, comment: comment.value.trim() })
+        toast(action === 'approve' ? '已批准，可啟動壓測' : '已駁回', 'ok')
+        close()
+        await load()
+      } catch (e) { toast(e.message, 'err') }
+    }
+    box.append(
+      comment,
+      el('div', { class: 'flex', style: 'gap:10px' }, [
+        el('button', { class: 'btn btn-primary', text: '✓ 批准', onclick: () => doReview('approve') }),
+        el('button', { class: 'btn', text: '✕ 駁回', onclick: () => doReview('reject') }),
+      ]),
+    )
+  } else if (plan.review) {
+    box.append(
+      el('div', { class: 'flex', style: 'gap:8px;align-items:center;margin-bottom:6px' }, [
+        statusBadge(plan.status),
+        el('span', { class: 'muted', style: 'font-size:12px', text: `審核專員 ${plan.review.reviewer} · ${fmtTime(plan.review.at, true)}` }),
+      ]),
+      el('div', { class: 'muted', style: 'font-size:12.5px', text: plan.review.comment || '（無意見）' }),
+    )
+  }
+  return box
 }
 
 /* ---------- 新建/編輯 ---------- */
@@ -127,7 +232,7 @@ function openPlanModal(plan = null) {
     try {
       if (plan) await put(`/api/stress/plans/${plan.id}`, payload)
       else await post('/api/stress/plans', payload)
-      toast(plan ? '已保存' : '已建立', 'ok')
+      toast(plan ? '已保存' : '已建立，等待審批', 'ok')
       close()
       await load()
     } catch (e) {

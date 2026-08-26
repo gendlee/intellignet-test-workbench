@@ -70,6 +70,14 @@ const URL_TEMPLATE = [
   { kind: 'var', value: 'v1' },
 ]
 
+/** 環境變量：AI 生成與執行時以「當前環境」的 baseUrl 拼接完整地址 */
+const ENVIRONMENTS = [
+  { id: 'SIT1', name: 'SIT1 系統集成測試', baseUrl: 'https://sit1.newapi.boc.com.hk', current: true },
+  { id: 'SIT3', name: 'SIT3 系統集成測試', baseUrl: 'https://sit3.newapi.boc.com.hk', current: false },
+  { id: 'USMK', name: 'USMK 市場測試', baseUrl: 'https://usmk.newapi.boc.com.hk', current: false },
+  { id: 'USMF', name: 'USMF 市場試運行', baseUrl: 'https://usmf.newapi.boc.com.hk', current: false },
+]
+
 const DEFAULT_HEADERS = [
   { name: 'API-Key', value: 'boc-ebp-2026-demo', enabled: true, secret: true },
   { name: 'Content-Type', value: 'application/json', enabled: true, secret: false },
@@ -121,9 +129,24 @@ export function seedDB(db) {
     systemId: 'EBP-CL',
     readOnly: false,
     urlTemplate: URL_TEMPLATE,
+    environments: ENVIRONMENTS,
     defaultHeaders: DEFAULT_HEADERS,
     diffRules: DIFF_RULES,
   }
+
+  // 業務模組（可獨立維護）
+  const MODULES = [
+    { code: 'ACCT', name: '帳戶查詢', description: '帳戶餘額、基本資料與交易明細查詢' },
+    { code: 'PAYM', name: '轉賬', description: '行內/跨行轉賬與授權' },
+    { code: 'LOAN', name: '貸款查詢', description: '貸款餘額與明細查詢' },
+    { code: 'TXNL', name: '交易明細', description: '交易明細清單查詢' },
+    { code: 'MISC', name: '費率查詢', description: '銀行費率/匯率查詢' },
+  ]
+  db.modules = MODULES.map((m, i) => ({
+    id: `M${String(i + 1).padStart(2, '0')}`,
+    ...m,
+    createdAt: isoAt(daysAgo(10, 9)),
+  }))
 
   // 案例
   const cases = CASE_SPECS.map((s, i) => {
@@ -138,6 +161,8 @@ export function seedDB(db) {
       stateType: s.stateType,
       status: s.status,
       precondition: s.precondition || '',
+      mode: 'compare',
+      hostFormat: 'XML',
       profile: s.profile,
       hostInput: { rawXml },
       newInput: { ...ai, refinedByHuman: false },
@@ -194,18 +219,19 @@ export function seedDB(db) {
     if (last) c.lastRun = last
   }
 
-  // 壓測計劃 + 一次完整壓測運行
+  // 壓測計劃（審批流程：pending → approved/rejected → running → done）
   const plans = [
-    { id: '', name: '帳戶查詢 — 日常峰值壓測', method: 'POST', url: 'https://newapi.boc.com.hk/ebp/api/v1/accountInquiry/ACCT1001', headers: DEFAULT_HEADERS, body: '{"acctNo":"123456789012345678","currency":"HKD"}', concurrency: 50, durationSec: 60, rampUpSec: 10, status: 'done', createdBy: '測試工程師 陳', createdAt: isoAt(daysAgo(2, 14)) },
-    { id: '', name: '轉賬接口 — 高併發驗證', method: 'POST', url: 'https://newapi.boc.com.hk/ebp/api/v1/transfer/PAYM2001', headers: DEFAULT_HEADERS, body: '{"fromAcctNo":"...","amount":"500.00"}', concurrency: 120, durationSec: 120, rampUpSec: 20, status: 'idle', createdBy: '測試工程師 陳', createdAt: isoAt(daysAgo(1, 16)) },
-    { id: '', name: '交易明細 — 穩定性測試', method: 'POST', url: 'https://newapi.boc.com.hk/ebp/api/v1/transactionList/ACCT1004', headers: DEFAULT_HEADERS, body: '{"acctNo":"123456789012345678","startDate":"20260801"}', concurrency: 30, durationSec: 300, rampUpSec: 30, status: 'idle', createdBy: '測試工程師 陳', createdAt: isoAt(daysAgo(4, 11)) },
+    { id: '', name: '帳戶查詢 — 日常峰值壓測', method: 'POST', url: 'https://newapi.boc.com.hk/ebp/api/v1/accountInquiry/ACCT1001', headers: DEFAULT_HEADERS, body: '{"acctNo":"123456789012345678","currency":"HKD"}', concurrency: 50, durationSec: 60, rampUpSec: 10, status: 'approved', review: { reviewer: '審核專員 李', comment: '計劃合理，批准執行', at: isoAt(daysAgo(2, 13, 40)) }, createdBy: '測試工程師 陳', createdAt: isoAt(daysAgo(2, 14)) },
+    { id: '', name: '轉賬接口 — 高併發驗證', method: 'POST', url: 'https://newapi.boc.com.hk/ebp/api/v1/transfer/PAYM2001', headers: DEFAULT_HEADERS, body: '{"fromAcctNo":"...","amount":"500.00"}', concurrency: 120, durationSec: 120, rampUpSec: 20, status: 'pending', review: null, createdBy: '測試工程師 陳', createdAt: isoAt(daysAgo(1, 16)) },
+    { id: '', name: '交易明細 — 穩定性測試', method: 'POST', url: 'https://newapi.boc.com.hk/ebp/api/v1/transactionList/ACCT1004', headers: DEFAULT_HEADERS, body: '{"acctNo":"123456789012345678","startDate":"20260801"}', concurrency: 30, durationSec: 300, rampUpSec: 30, status: 'approved', review: { reviewer: '審核專員 李', comment: '批准執行', at: isoAt(daysAgo(3, 10, 20)) }, createdBy: '測試工程師 陳', createdAt: isoAt(daysAgo(4, 11)) },
   ]
   for (const p of plans) {
     const rec = insert(db, 'stressPlans', p)
-    if (p.status === 'done') {
+    if (p.id === plans[0].id) {
       const run = buildStressRun({ ...rec, runCount: 1 }, isoAt(daysAgo(2, 14, 30)))
       insert(db, 'stressRuns', run)
       rec.lastRun = run
+      rec.status = 'done'
     }
   }
 }

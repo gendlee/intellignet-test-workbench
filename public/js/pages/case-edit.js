@@ -1,15 +1,19 @@
 /**
  * 案例錄入 / 編輯頁
- * 需求 3：人工錄入主機（XML）案例 → AI 自動生成對應新系統（HTTP/JSON）案例
- *        （AI 生成後保留手動編輯選項，可重新生成）
+ * - 對比模式（主機 vs 新系統）：主機報文（XML/JSON 格式可選）→ AI 生成新系統請求 或 手動填寫
+ * - 獨立 HTTP 模式：單一請求，判定依據 HTTP 狀態碼
+ * - 兩側均支持「原始報文 / 表單模式」切換：字段級增刪改（views/field-editor.js）
+ * - 業務模塊下拉（/api/modules），可內嵌新建
  */
 
 import { initLayout } from '../layout.js'
 import { get, post, put } from '../api.js'
 import { el } from '../util.js'
 import { openModal, toast } from '../components.js'
+import { parseRows, serializeRows, renderFieldForm } from '../views/field-editor.js'
 
 const caseId = new URLSearchParams(location.search).get('id')
+
 const state = {
   existing: null,
   txnCode: '',
@@ -17,14 +21,21 @@ const state = {
   module: '',
   stateType: 'STATELESS',
   precondition: '',
-  hostXml: '',
-  newInput: null, // { url, method, headers[], body }
+  mode: 'compare',            // compare | http
+  hostFormat: 'XML',          // XML | JSON
+  hostRaw: '',
+  hostFormMode: false,
+  hostRows: [],
+  newInput: null,             // { url, method, headers[], body }
+  bodyFormMode: false,
+  bodyRows: [],
+  modules: [],
   aiMeta: null,
 }
 
-/* ---------- XML 樣板 ---------- */
+/* ---------- 報文樣板 ---------- */
 
-const TEMPLATES = {
+const XML_TEMPLATES = {
   帳戶查詢: (txn) => `<?xml version="1.0" encoding="UTF-8"?>
 <AccountInquiryRequest>
   <Header>
@@ -78,6 +89,25 @@ const TEMPLATES = {
 </LoanBalanceRequest>`,
 }
 
+const JSON_TEMPLATES = {
+  帳戶查詢: (txn) => JSON.stringify({
+    Header: { TxnCode: txn, Channel: 'EBI', UserId: 'TEST01', TxnTime: '2026-08-20T10:00:00.000+08:00' },
+    Body: { AcctNo: '123456789012345678', Currency: 'HKD' },
+  }, null, 2),
+  交易明細: (txn) => JSON.stringify({
+    Header: { TxnCode: txn, Channel: 'EBI', UserId: 'TEST01' },
+    Body: { AcctNo: '123456789012345678', StartDate: '20260801', EndDate: '20260826' },
+  }, null, 2),
+  轉賬: (txn) => JSON.stringify({
+    Header: { TxnCode: txn, Channel: 'EBI', UserId: 'TEST01' },
+    Body: { FromAcctNo: '123456789012345678', ToAcctNo: '876543210987654321', Amount: 500.0, Currency: 'HKD' },
+  }, null, 2),
+  貸款查詢: (txn) => JSON.stringify({
+    Header: { TxnCode: txn, Channel: 'EBI', UserId: 'TEST01' },
+    Body: { LoanNo: 'LN2026000012' },
+  }, null, 2),
+}
+
 let rootEl
 
 /* ---------- 渲染 ---------- */
@@ -85,26 +115,21 @@ let rootEl
 function render() {
   rootEl.innerHTML = ''
   const form = el('div', {})
+
   form.append(
     el('div', { class: 'card' }, [
       el('div', { class: 'card-head' }, [
         el('h2', { text: caseId ? '編輯案例' : '錄入新案例' }),
-        el('span', { class: 'sub', text: '以交易碼唯一標識案例；主機報文錄入後可一鍵 AI 生成新系統案例' }),
+        el('span', { class: 'sub', text: '以交易碼唯一標識案例；可選擇對比模式或獨立 HTTP 模式' }),
       ]),
       el('div', { class: 'card-body' }, [
         el('div', { class: 'form-grid' }, [
           field('交易碼（唯一標識）', el('input', { class: 'input', id: 'f-txn', value: state.txnCode, disabled: !!caseId, placeholder: '例：ACCT1001' })),
           field('案例名稱', el('input', { class: 'input', id: 'f-name', value: state.name, placeholder: '例：帳戶查詢 — 基本成功' })),
-          field('業務模組', el('input', { class: 'input', id: 'f-module', value: state.module, placeholder: '例：帳戶查詢' })),
-          field('接口類型', el('div', { class: 'flex' }, [
-            (() => {
-              const sel = el('select', { class: 'select', id: 'f-state' }, [
-                el('option', { value: 'STATELESS', text: '無狀態（同輸入應同輸出）' }),
-                el('option', { value: 'STATEFUL', text: '有狀態（結果可能受前置狀態影響）' }),
-              ])
-              sel.value = state.stateType
-              return sel
-            })(),
+          field('業務模塊', moduleSelect()),
+          field('接口類型', el('select', { class: 'select', id: 'f-state', onchange: (e) => (state.stateType = e.target.value) }, [
+            el('option', { value: 'STATELESS', text: '無狀態（同輸入應同輸出）' }),
+            el('option', { value: 'STATEFUL', text: '有狀態（結果可能受前置狀態影響）' }),
           ])),
           el('div', { class: 'full' }, [
             field('前置條件（有狀態接口建議填寫）', el('input', { class: 'input', id: 'f-pre', value: state.precondition, placeholder: '例：需先執行開戶 ACCT0001 並產生至少 1 筆交易' })),
@@ -112,53 +137,22 @@ function render() {
         ]),
       ]),
     ]),
-    el('div', { class: 'edit-layout', style: 'margin-top:16px' }, [
-      // 主機側
-      el('div', {}, [
-        el('div', { class: 'flex', style: 'margin-bottom:8px' }, [
-          el('label', { class: 'field', style: 'margin:0', text: '主機系統輸入報文（XML）' }),
-          el('span', { class: 'spacer' }),
-          el('span', { class: 'muted', style: 'font-size:12px', text: '樣板：' }),
-          ...Object.keys(TEMPLATES).map((k) => el('button', {
-            class: 'btn btn-sm',
-            text: k,
-            onclick: () => { document.getElementById('f-host').value = TEMPLATES[k](state.txnCode || 'ACCT9001'); markDirty() },
-          })),
-        ]),
-        el('textarea', { class: 'textarea xml-editor', id: 'f-host', oninput: markDirty }),
-        el('div', { class: 'ai-bar' }, [
-          el('button', {
-            class: 'btn btn-primary',
-            id: 'btn-ai',
-            text: '✨ AI 生成新系統案例',
-            onclick: aiGenerate,
-          }),
-          el('span', { class: 'ai-note', id: 'ai-note' }, [
-            el('span', { class: 'spark', text: '✦' }),
-            el('span', { text: 'AI 依據主機報文自動生成 HTTP/JSON 案例，生成後可人工微調、可重新生成' }),
-          ]),
-        ]),
+    el('div', { class: 'card', style: 'margin-top:16px' }, [
+      el('div', { class: 'card-head' }, [
+        el('h2', { text: '接口定義' }),
+        el('span', { class: 'sub', id: 'mode-sub', text: modeSub() }),
       ]),
-      // 新系統側
-      el('div', {}, [
-        el('div', { class: 'flex', style: 'margin-bottom:8px' }, [
-          el('label', { class: 'field', style: 'margin:0', text: '新系統接口（HTTP/JSON）' }),
-          el('span', { class: 'spacer' }),
-          el('span', { class: 'badge badge-info', id: 'gen-badge', text: '尚未生成' }),
-        ]),
-        el('div', { class: 'form-grid', style: 'gap:8px' }, [
-          field('URL', el('div', { class: 'flex' }, [
-            el('select', { class: 'select', id: 'f-method', style: 'width:110px' }, [
-              el('option', { text: 'POST' }), el('option', { text: 'GET' }),
-              el('option', { text: 'PUT' }), el('option', { text: 'DELETE' }),
-            ]),
-            el('input', { class: 'input', id: 'f-url', style: 'flex:1', placeholder: 'https://newapi.boc.com.hk/ebp/api/…', disabled: !state.newInput }),
-          ])),
-          field('請求頭（預設從系統配置帶入）', el('div', { id: 'f-headers', class: 'flex' }, [el('span', { class: 'muted', text: '生成後顯示' })])),
-          el('div', { class: 'full' }, [
-            field('請求體（JSON）', el('textarea', { class: 'textarea json-editor', id: 'f-body', disabled: !state.newInput, oninput: () => (state.newInput.body = document.getElementById('f-body').value) })),
+      el('div', { class: 'card-body' }, [
+        el('div', { class: 'flex', style: 'margin-bottom:14px;gap:10px' }, [
+          el('label', { class: 'field', style: 'margin:0', text: '案例模式' }),
+          el('select', { class: 'select', id: 'f-mode', style: 'width:230px', onchange: (e) => setMode(e.target.value) }, [
+            el('option', { value: 'compare', text: '對比模式（主機 vs 新系統）' }),
+            el('option', { value: 'http', text: '獨立 HTTP 模式（單一請求）' }),
           ]),
         ]),
+        state.mode === 'compare'
+          ? el('div', { class: 'edit-layout' }, [hostPanel(), newPanel()])
+          : el('div', { class: 'edit-layout single' }, [httpPanel()]),
       ]),
     ]),
     el('div', { class: 'flex', style: 'margin-top:20px;gap:12px' }, [
@@ -169,7 +163,10 @@ function render() {
     ])
   )
   rootEl.append(form)
-  if (state.newInput) fillNewInput(state.newInput)
+  // 同步控件值
+  form.querySelector('#f-mode').value = state.mode
+  form.querySelector('#f-state').value = state.stateType
+  if (state.newInput) fillNewInput()
   if (state.existing?.review) {
     rootEl.append(el('div', { class: 'card', style: 'margin-top:14px' }, [
       el('div', { class: 'card-head' }, [el('h2', { text: '上次審核意見' })]),
@@ -178,35 +175,168 @@ function render() {
   }
 }
 
+function modeSub() {
+  return state.mode === 'compare'
+    ? '主機報文 vs 新系統 HTTP 請求，AI 可一鍵生成新系統側'
+    : '單一 HTTP 請求，執行時按 HTTP 狀態碼判定（2xx 為通過）'
+}
+
 function field(label, input) {
   return el('div', { class: 'field-row' }, [el('label', { class: 'field', text: label }), input])
 }
 
-/** 渲染新系統輸入（AI 生成結果或載入既有案例） */
-function fillNewInput(ni) {
-  state.newInput = ni
+/* ---------- 主機側面板（對比模式） ---------- */
+
+function hostPanel() {
+  const fmtSelect = el('select', { class: 'select', id: 'f-hfmt', style: 'width:110px', onchange: (e) => setHostFormat(e.target.value) }, [
+    el('option', { value: 'XML', text: 'XML' }),
+    el('option', { value: 'JSON', text: 'JSON' }),
+  ])
+  const templates = (state.hostFormat === 'XML' ? XML_TEMPLATES : JSON_TEMPLATES)
+  return el('div', { class: 'panel' }, [
+    el('div', { class: 'panel-toolbar' }, [
+      el('label', { class: 'field', style: 'margin:0', text: '主機系統輸入報文' }),
+      fmtSelect,
+      el('span', { class: 'muted', style: 'font-size:12px', text: '樣板：' }),
+      ...Object.keys(templates).map((k) => el('button', {
+        class: 'btn btn-sm', text: k,
+        onclick: () => { state.hostRaw = templates[k](state.txnCode || 'ACCT9001'); markDirty(); render() },
+      })),
+      el('span', { class: 'spacer' }),
+      el('button', {
+        class: 'btn btn-sm', id: 'host-toggle',
+        text: state.hostFormMode ? '原始報文' : '表單模式',
+        onclick: () => (state.hostFormMode ? exitHostForm() : enterHostForm()),
+      }),
+    ]),
+    state.hostFormMode
+      ? el('div', { class: 'fe-wrap' }, [
+          renderFieldForm({
+            rows: state.hostRows,
+            onEdit: (i, patch) => Object.assign(state.hostRows[i], patch),
+            onDelete: (i) => { state.hostRows.splice(i, 1); render() },
+            onAdd: (path, type, value) => addField(state.hostRows, path, type, value, state.hostFormat),
+          }),
+        ])
+      : el('textarea', {
+          class: 'textarea editor', id: 'f-host',
+          value: state.hostRaw,
+          oninput: (e) => { state.hostRaw = e.target.value; markDirty() },
+          placeholder: state.hostFormat === 'XML'
+            ? '貼入主機 XML 報文…'
+            : '貼入主機 JSON 報文…',
+        }),
+    el('div', { class: 'ai-bar' }, [
+      el('button', {
+        class: 'btn btn-primary', id: 'btn-ai',
+        text: '✨ AI 生成新系統案例',
+        onclick: aiGenerate,
+      }),
+      el('span', { class: 'ai-note', id: 'ai-note' }, [
+        el('span', { class: 'spark', text: '✦' }),
+        el('span', { text: 'AI 依據主機報文自動生成 HTTP/JSON 請求，生成後可人工微調、可重新生成' }),
+      ]),
+    ]),
+  ])
+}
+
+/* ---------- 新系統側面板（對比 / HTTP 共用字段） ---------- */
+
+function newPanel() {
+  return el('div', { class: 'panel' }, [...reqFields('新系統接口（HTTP/JSON）', state.newInput ? 'ai-badge' : '')])
+}
+
+function httpPanel() {
+  return el('div', { class: 'panel' }, [...reqFields('HTTP 請求（單一請求）', 'badge-info')])
+}
+
+function reqFields(title, badgeCls) {
+  const hasNi = !!state.newInput
+  const bodyFmt = 'JSON'
+  return [
+    el('div', { class: 'panel-toolbar' }, [
+      el('label', { class: 'field', style: 'margin:0', text: title }),
+      el('span', { class: 'spacer' }),
+      el('span', { class: 'badge ' + badgeCls, id: 'gen-badge', text: state.newInput ? genBadgeText() : '尚未生成' }),
+    ]),
+    el('div', { class: 'form-grid', style: 'gap:8px' }, [
+      field('URL', el('div', { class: 'flex' }, [
+        el('select', { class: 'select', id: 'f-method', style: 'width:110px', disabled: !hasNi, onchange: (e) => (state.newInput.method = e.target.value) }, [
+          el('option', { text: 'POST' }), el('option', { text: 'GET' }),
+          el('option', { text: 'PUT' }), el('option', { text: 'DELETE' }),
+        ]),
+        el('input', { class: 'input', id: 'f-url', style: 'flex:1', placeholder: 'https://newapi.boc.com.hk/ebp/api/…', disabled: !hasNi, oninput: (e) => (state.newInput.url = e.target.value) }),
+      ])),
+      field('請求頭', el('div', { id: 'f-headers', class: 'flex' }, [el('span', { class: 'muted', text: '可增刪請求頭' })])),
+      el('div', { class: 'full' }, [
+        el('div', { class: 'flex', style: 'gap:8px;margin-bottom:6px;align-items:center' }, [
+          el('label', { class: 'field', style: 'margin:0', text: `請求體（${bodyFmt}）` }),
+          el('span', { class: 'spacer' }),
+          el('button', {
+            class: 'btn btn-sm', id: 'body-toggle', style: 'visibility:' + (state.newInput ? 'visible' : 'hidden'),
+            text: state.bodyFormMode ? '原始報文' : '表單模式',
+            onclick: () => (state.bodyFormMode ? exitBodyForm() : enterBodyForm()),
+          }),
+        ]),
+        state.bodyFormMode && state.newInput
+          ? el('div', { class: 'fe-wrap' }, [
+              renderFieldForm({
+                rows: state.bodyRows,
+                onEdit: (i, patch) => Object.assign(state.bodyRows[i], patch),
+                onDelete: (i) => { state.bodyRows.splice(i, 1); render() },
+                onAdd: (path, type, value) => addField(state.bodyRows, path, type, value, 'JSON'),
+              }),
+            ])
+          : el('textarea', {
+              class: 'textarea editor', id: 'f-body',
+              disabled: !hasNi,
+              value: state.newInput?.body || '',
+              oninput: (e) => (state.newInput.body = e.target.value),
+              placeholder: '{\n  "Header": { … },\n  "Body": { … }\n}',
+            }),
+      ]),
+    ]),
+  ]
+}
+
+function genBadgeText() {
+  if (state.mode === 'http') return '獨立 HTTP 模式'
+  const m = state.aiMeta
+  if (!m) return '人工編輯'
+  return m.refinedByHuman ? 'AI 生成 + 人工微調' : 'AI 生成（未手動修改）'
+}
+
+/** 渲染新系統請求字段值（AI 生成結果或載入既有案例） */
+function fillNewInput() {
+  const ni = state.newInput
   document.getElementById('f-method').value = ni.method || 'POST'
-  document.getElementById('f-url').value = ni.url || ''
-  document.getElementById('f-url').disabled = false
-  document.getElementById('f-body').disabled = false
-  document.getElementById('f-body').value = ni.body || ''
-  document.getElementById('gen-badge').textContent = state.aiMeta?.source === 'ai' && !state.aiMeta?.refinedByHuman
-    ? 'AI 生成（未手動修改）' : state.aiMeta?.refinedByHuman ? 'AI 生成 + 人工微調' : '人工編輯'
-  document.getElementById('gen-badge').className = 'badge badge-info'
-  // 請求頭
+  const url = document.getElementById('f-url')
+  url.value = ni.url || ''
+  url.disabled = false
+  document.getElementById('f-method').disabled = false
+  const body = document.getElementById('f-body')
+  if (body) {
+    body.disabled = false
+    body.value = ni.body || ''
+  }
+  const badge = document.getElementById('gen-badge')
+  if (badge) {
+    badge.textContent = genBadgeText()
+    badge.className = 'badge ' + (state.mode === 'http' ? 'badge-info' : (state.aiMeta?.refinedByHuman ? 'badge-warn' : 'badge-info'))
+  }
   const box = document.getElementById('f-headers')
   box.innerHTML = ''
-  const rows = (ni.headers || []).map((h, i) => headerRow(h, i))
-  const addBtn = el('button', {
-    class: 'btn btn-sm',
-    text: '＋ 請求頭',
-    onclick: () => { state.newInput.headers.push({ name: '', value: '' }); fillNewInput(state.newInput) },
-  })
-  box.append(...rows, addBtn)
+  box.append(
+    ...(ni.headers || []).map((h, i) => headerRow(h, i)),
+    el('button', {
+      class: 'btn btn-sm', text: '＋ 請求頭',
+      onclick: () => { state.newInput.headers.push({ name: '', value: '' }); fillNewInput() },
+    })
+  )
 }
 
 function headerRow(h, i) {
-  const row = el('div', { class: 'header-row', style: 'grid-template-columns:190px 1fr 34px;margin-bottom:6px' }, [
+  return el('div', { class: 'header-row', style: 'grid-template-columns:190px 1fr 34px;margin-bottom:6px' }, [
     el('input', {
       class: 'input', style: 'font-family:var(--mono);font-size:12px',
       value: h.name, placeholder: '名稱',
@@ -219,25 +349,148 @@ function headerRow(h, i) {
     }),
     el('button', {
       class: 'btn btn-sm btn-ghost', text: '✕',
-      onclick: () => { state.newInput.headers.splice(i, 1); fillNewInput(state.newInput) },
+      onclick: () => { state.newInput.headers.splice(i, 1); fillNewInput() },
     }),
   ])
-  return row
 }
 
-/* ---------- 動作 ---------- */
+/* ---------- 模式 / 格式 / 表單模式切換 ---------- */
+
+function setMode(mode) {
+  if (mode === state.mode) return
+  state.mode = mode
+  if (mode === 'http' && !state.newInput) {
+    state.newInput = { url: '', method: 'POST', headers: [], body: '' }
+  }
+  if (mode === 'compare' && state.newInput && !state.newInput.url && !state.newInput.body) {
+    // 空請求體退回未生成狀態
+    state.newInput = null
+  }
+  render()
+}
+
+function setHostFormat(fmt) {
+  const cur = state.hostRaw
+  if (state.hostFormMode) {
+    const out = serializeRows(state.hostFormat, state.hostRows)
+    const res = parseRows(fmt, out)
+    if (res.error) return toast(`無法切換格式：${res.error}`, 'warn')
+    state.hostRows = res.rows
+  } else if (cur.trim()) {
+    const res = parseRows(fmt, cur)
+    if (res.error) {
+      // 舊報文與新格式不兼容：提示後清空（樣板/手貼均可重建）
+      if (!window.confirm(`當前報文與「${fmt}」格式不匹配（${res.error}）。\n切換後報文將被清空，是否繼續？`)) {
+        const sel = document.getElementById('f-hfmt')
+        if (sel) sel.value = state.hostFormat
+        return
+      }
+      state.hostRaw = ''
+    }
+  }
+  state.hostFormat = fmt
+  render()
+}
+
+function enterHostForm() {
+  const res = parseRows(state.hostFormat, state.hostRaw)
+  if (res.error) return toast(`無法解析為表單：${res.error}`, 'warn')
+  state.hostRows = res.rows
+  state.hostFormMode = true
+  render()
+}
+
+function exitHostForm() {
+  state.hostRaw = serializeRows(state.hostFormat, state.hostRows)
+  state.hostFormMode = false
+  render()
+}
+
+function enterBodyForm() {
+  const raw = state.newInput?.body || ''
+  const res = parseRows('JSON', raw)
+  if (res.error) return toast(`無法解析為表單：${res.error}`, 'warn')
+  state.bodyRows = res.rows
+  state.bodyFormMode = true
+  render()
+}
+
+function exitBodyForm() {
+  state.newInput.body = serializeRows('JSON', state.bodyRows)
+  state.bodyFormMode = false
+  render()
+}
+
+/** 表單模式新增字段：點分路徑 → 行（format 用於 XML 根標籤校驗） */
+function addField(rows, path, type, value, format) {
+  const segs = path.split('.').map((s) => s.trim()).filter(Boolean)
+  if (!segs.length) return
+  if (format === 'XML' && rows.length && segs[0] !== rows[0].path[0]) {
+    return toast(`XML 路徑需以根標籤 ${rows[0].path[0]} 開頭`, 'warn')
+  }
+  rows.push({ path: segs, key: segs[segs.length - 1], type, raw: value })
+  render()
+}
+
+/* ---------- 業務模塊下拉 ---------- */
+
+function moduleSelect() {
+  const opts = state.modules.map((m) =>
+    el('option', { value: m.name, text: `${m.code} · ${m.name}`, selected: state.module === m.name })
+  )
+  if (state.module && !state.modules.some((m) => m.name === state.module)) {
+    opts.push(el('option', { value: state.module, text: state.module + '（未登記）', selected: true }))
+  }
+  opts.push(el('option', { value: '__new__', text: '＋ 新增業務模塊…' }))
+  return el('select', {
+    class: 'select', id: 'f-module',
+    onchange: (e) => { if (e.target.value === '__new__') { openNewModule() } else state.module = e.target.value },
+  }, opts)
+}
+
+function openNewModule() {
+  const form = el('div', { class: 'form-grid' }, [
+    el('div', { class: 'field-row' }, [
+      el('label', { class: 'field', text: '模塊代碼（唯一）' }),
+      el('input', { class: 'input mono', id: 'nm-code', placeholder: '例：ACCT' }),
+    ]),
+    el('div', { class: 'field-row' }, [
+      el('label', { class: 'field', text: '模塊名稱' }),
+      el('input', { class: 'input', id: 'nm-name', placeholder: '例：帳戶查詢' }),
+    ]),
+  ])
+  const okBtn = el('button', {
+    class: 'btn btn-primary', text: '建立', onclick: async () => {
+      const code = form.querySelector('#nm-code').value.trim()
+      const name = form.querySelector('#nm-name').value.trim()
+      if (!code || !name) return toast('代碼與名稱必填', 'warn')
+      try {
+        await post('/api/modules', { code, name, description: '' })
+        state.modules = await get('/api/modules')
+        state.module = name
+        close()
+        render()
+        toast('模塊已建立', 'ok')
+      } catch (e) { toast(e.message, 'err') }
+    },
+  })
+  const cancelBtn = el('button', { class: 'btn', text: '取消', onclick: close })
+  const { close } = openModal({ title: '新增業務模塊', body: form, foot: [cancelBtn, okBtn] })
+}
+
+/* ---------- AI 生成 ---------- */
 
 async function aiGenerate() {
   const btn = document.getElementById('btn-ai')
-  const hostXml = document.getElementById('f-host').value.trim()
-  if (!hostXml) return toast('請先輸入主機 XML 報文', 'warn')
+  if (!state.hostRaw.trim()) return toast('請先輸入主機報文', 'warn')
+  if (state.hostFormat !== 'XML') return toast('AI 生成目前支援 XML 主機報文，請切換格式', 'warn')
   btn.disabled = true
   btn.textContent = 'AI 生成中…'
   try {
-    const { newInput } = await post('/api/cases/ai-generate', { hostXml })
+    const { newInput } = await post('/api/cases/ai-generate', { hostXml: state.hostRaw })
     state.newInput = newInput
     state.aiMeta = { source: 'ai', generatedAt: new Date().toISOString(), refinedByHuman: false }
-    fillNewInput(newInput)
+    render()
     toast('AI 已生成新系統案例，可手動微調後提交', 'ok')
   } catch (e) {
     toast(e.message, 'err')
@@ -249,27 +502,44 @@ async function aiGenerate() {
 
 function markDirty() {
   const note = document.getElementById('ai-note')
-  if (note) note.querySelector('span:last-child').textContent = '主機報文已修改，建議重新生成新系統案例以保持同步'
+  if (note && !state.hostFormMode) note.querySelector('span:last-child').textContent = '主機報文已修改，建議重新生成新系統案例以保持同步'
 }
 
+/* ---------- 保存 ---------- */
+
 async function save() {
+  // 表單模式下先序列化回報文
+  if (state.hostFormMode) {
+    state.hostRaw = serializeRows(state.hostFormat, state.hostRows)
+    state.hostFormMode = false
+  }
+  if (state.bodyFormMode && state.newInput) {
+    state.newInput.body = serializeRows('JSON', state.bodyRows)
+    state.bodyFormMode = false
+  }
   const payload = {
     txnCode: state.txnCode || document.getElementById('f-txn').value.trim(),
     name: document.getElementById('f-name').value.trim(),
-    module: document.getElementById('f-module').value.trim(),
-    stateType: document.getElementById('f-state').value,
+    module: state.module,
+    stateType: state.stateType,
     precondition: document.getElementById('f-pre').value.trim(),
-    hostInput: { rawXml: document.getElementById('f-host').value.trim() },
-    newInput: state.newInput || null,
+    mode: state.mode,
+    hostFormat: state.hostFormat,
+    hostInput: state.mode === 'compare' ? { rawXml: state.hostRaw } : null,
+    newInput: state.newInput,
   }
   if (!payload.txnCode) return toast('請填寫交易碼', 'warn')
   if (!payload.name) return toast('請填寫案例名稱', 'warn')
-  if (!payload.hostInput.rawXml) return toast('請輸入主機 XML 報文', 'warn')
-  const hint = document.getElementById('save-hint')
-  if (!payload.newInput) {
-    const yes = await confirmAsk('尚未生成新系統案例，僅保存主機側？建議使用 AI 生成以完成案例。', '仍要保存')
-    if (!yes) return
+  if (state.mode === 'compare') {
+    if (!state.hostRaw.trim()) return toast('請輸入主機報文', 'warn')
+    if (!payload.newInput) {
+      const yes = await confirmAsk('尚未生成新系統請求，僅保存主機側？建議使用 AI 生成以完成案例。', '仍要保存')
+      if (!yes) return
+    }
+  } else if (!payload.newInput?.url.trim()) {
+    return toast('請填寫請求 URL', 'warn')
   }
+  const hint = document.getElementById('save-hint')
   hint.textContent = '保存中…'
   try {
     let rec
@@ -305,17 +575,11 @@ async function loadExisting() {
   state.module = c.module
   state.stateType = c.stateType
   state.precondition = c.precondition
-  state.hostXml = c.hostInput?.rawXml || ''
-  state.newInput = c.newInput ? { ...c.newInput } : null
+  state.mode = c.mode === 'http' ? 'http' : 'compare'
+  state.hostFormat = c.hostFormat === 'JSON' ? 'JSON' : 'XML'
+  state.hostRaw = c.hostInput?.rawXml || ''
+  state.newInput = c.newInput ? { ...c.newInput, headers: [...(c.newInput.headers || [])] } : null
   state.aiMeta = c.aiMeta
-  const txn = document.getElementById('f-txn')
-  if (txn) txn.value = c.txnCode
-  document.getElementById('f-name').value = c.name
-  document.getElementById('f-module').value = c.module
-  document.getElementById('f-state').value = c.stateType
-  document.getElementById('f-pre').value = c.precondition
-  document.getElementById('f-host').value = state.hostXml
-  if (state.newInput) fillNewInput(state.newInput)
 }
 
 /* ---------- 初始化 ---------- */
@@ -323,10 +587,14 @@ async function loadExisting() {
 async function init() {
   initLayout()
   rootEl = document.getElementById('page')
+  try {
+    state.modules = await get('/api/modules')
+  } catch { /* 模塊載入失敗不阻塞錄入 */ }
   render()
   if (caseId) {
     try {
       await loadExisting()
+      render()
     } catch (e) {
       toast(e.message, 'err')
       setTimeout(() => location.href = '/cases.html', 1200)

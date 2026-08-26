@@ -18,6 +18,7 @@ export function createDB() {
     stressPlans: [],
     stressRuns: [],
     auditLogs: [],
+    modules: [],
     systems: [],
     meta: null,
     config: null,

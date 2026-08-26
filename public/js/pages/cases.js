@@ -35,7 +35,6 @@ async function load() {
   state.total = data.total
   state.list = data.list
   state.selected = new Set([...state.selected].filter((id) => data.list.some((c) => c.id === id)))
-  state.modules = [...new Set(data.list.map((c) => c.module))].sort()
   render()
 }
 
@@ -242,8 +241,14 @@ function debounceJs(fn, ms) {
 async function init() {
   initLayout()
   rootEl = document.getElementById('page')
+  // 支持 ?module= 進入即選定模塊（儀表板模塊卡跳轉用）
+  const mod = new URLSearchParams(location.search).get('module')
+  if (mod) state.module = mod
   try {
-    const meta = await loadMeta()
+    await loadMeta()
+    // 模塊下拉用預定義業務模塊（/api/modules），而非當前頁列表
+    const mods = await get('/api/modules')
+    state.modules = mods.map((m) => m.name)
     await load()
   } catch (e) {
     showErr(e)

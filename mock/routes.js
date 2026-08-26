@@ -60,6 +60,38 @@ export function buildRoutes(db) {
   get(/^\/api\/meta\/context$/, () => ok(db.meta))
   get(/^\/api\/systems$/, () => ok(db.systems))
 
+  /* ---------- 業務模組（可獨立維護） ---------- */
+  get(/^\/api\/modules$/, () => {
+    const withCount = [...db.modules].map((m) => ({
+      ...m,
+      caseCount: db.cases.filter((c) => c.module === m.name).length,
+    }))
+    return ok(withCount)
+  })
+  post(/^\/api\/modules$/, (q, m, body) => {
+    const { name, code, description } = body || {}
+    if (!name || !code) return err(4000, '模組名稱與代碼必填')
+    if (db.modules.some((x) => x.code === code)) return err(4000, `模組代碼 ${code} 已存在`)
+    const rec = insert(db, 'modules', { name, code, description: description || '', createdAt: now() })
+    return ok(rec)
+  })
+  put(/^\/api\/modules\/([A-Za-z0-9]+)$/, (q, m, body) => {
+    const x = find(db, 'modules', m[1])
+    if (!x) return err(4040, '模組不存在')
+    const patch = {}
+    if (body?.name) patch.name = body.name
+    if (body?.code) patch.code = body.code
+    if (body?.description !== undefined) patch.description = body.description
+    return ok(update(db, 'modules', x.id, patch))
+  })
+  del(/^\/api\/modules\/([A-Za-z0-9]+)$/, (q, m) => {
+    const x = find(db, 'modules', m[1])
+    if (!x) return err(4040, '模組不存在')
+    if (db.cases.some((c) => c.module === x.name)) return err(4000, '該模組下仍有案例，無法刪除（可改為停用或先調整案例）')
+    remove(db, 'modules', m[1])
+    return ok({ id: m[1], deleted: true })
+  })
+
   /* ---------- Dashboard ---------- */
   get(/^\/api\/dashboard\/summary$/, () => {
     const runs = db.runs
@@ -92,7 +124,7 @@ export function buildRoutes(db) {
           runBy: r.runBy,
           startedAt: r.startedAt,
           finishedAt: r.finishedAt,
-          summary: r.diff.summary,
+          summary: r.diff ? r.diff.summary : null,
         }
       })
     return ok(list)
@@ -125,6 +157,27 @@ export function buildRoutes(db) {
       const map = new Map()
       for (const c of db.cases) map.set(c.module, (map.get(c.module) || 0) + 1)
       return ok({ labels: [...map.keys()], series: [...map.values()] })
+    }
+    if (type === 'module-cards') {
+      // 按業務模組聚合：案例數 / 運行數 / 通過率 / 最近判定
+      const out = []
+      const moduleOf = (m) => m || '未分類'
+      const mods = [...new Set(db.cases.map((c) => moduleOf(c.module)))]
+      for (const m of mods.sort()) {
+        const caseRecs = db.cases.filter((c) => moduleOf(c.module) === m)
+        const runRecs = db.runs.filter((r) => caseRecs.some((c) => c.id === r.caseId))
+        const pass = runRecs.filter((r) => r.verdict === 'PASS').length
+        const last = runRecs.sort((a, b) => b.startedAt.localeCompare(a.startedAt))[0] || null
+        out.push({
+          module: m,
+          caseCount: caseRecs.length,
+          runCount: runRecs.length,
+          passRate: runRecs.length ? Math.round((pass / runRecs.length) * 100) : null,
+          lastVerdict: last ? last.verdict : null,
+          lastRunAt: last ? last.startedAt : null,
+        })
+      }
+      return ok(out)
     }
     if (type === 'execution-trend') {
       const labels = []
@@ -167,7 +220,7 @@ export function buildRoutes(db) {
   })
 
   post(/^\/api\/cases$/, (q, m, body) => {
-    const { txnCode, name, module, stateType, hostInput, newInput, precondition } = body || {}
+    const { txnCode, name, module, stateType, hostInput, newInput, precondition, mode, hostFormat } = body || {}
     if (!txnCode || !name) return err(4000, '交易碼與案例名稱必填')
     if (db.cases.some((c) => c.txnCode === txnCode)) return err(4000, `交易碼 ${txnCode} 已存在`)
     const c = insert(db, 'cases', {
@@ -178,6 +231,8 @@ export function buildRoutes(db) {
       stateType: stateType === 'STATEFUL' ? 'STATEFUL' : 'STATELESS',
       status: 'PENDING',
       precondition: precondition || '',
+      mode: mode === 'http' ? 'http' : 'compare',
+      hostFormat: hostFormat === 'JSON' ? 'JSON' : 'XML',
       profile: 'pass',
       hostInput: { rawXml: hostInput?.rawXml || '' },
       newInput: newInput || null,
@@ -195,21 +250,25 @@ export function buildRoutes(db) {
   put(/^\/api\/cases\/([A-Za-z0-9]+)$/, (q, m, body) => {
     const c = find(db, 'cases', m[1])
     if (!c) return err(4040, '案例不存在')
-    const { name, module, stateType, hostInput, newInput, precondition } = body || {}
+    const { name, module, stateType, hostInput, newInput, precondition, mode, hostFormat } = body || {}
     const patch = {}
     if (name) patch.name = name
     if (module) patch.module = module
     if (stateType) patch.stateType = stateType === 'STATEFUL' ? 'STATEFUL' : 'STATELESS'
+    if (mode) patch.mode = mode === 'http' ? 'http' : 'compare'
+    if (hostFormat) patch.hostFormat = hostFormat === 'JSON' ? 'JSON' : 'XML'
     if (hostInput) patch.hostInput = { rawXml: hostInput.rawXml }
     if (newInput) patch.newInput = { ...newInput, refinedByHuman: true }
     if (precondition !== undefined) patch.precondition = precondition
-    if (patch.newInput || patch.hostInput) {
+    const contentChanged = Boolean(patch.newInput || patch.hostInput || patch.mode || patch.hostFormat)
+    if (contentChanged) {
       patch.aiMeta = { source: 'ai', generatedAt: c.aiMeta?.generatedAt, refinedByHuman: true }
       patch.updatedAt = now()
     }
-    if (c.status === 'PENDING' && body && body.hostInput) {
-      // 修改後維持待審核；已審核案例修改後重新回到待審核
-      if (c.status === 'APPROVED' || c.status === 'REJECTED') patch.status = 'PENDING'
+    // 報文/模式/格式任一變更 → 已審核案例重新回到待審核（清掉舊審核意見）
+    if (contentChanged && (c.status === 'APPROVED' || c.status === 'REJECTED')) {
+      patch.status = 'PENDING'
+      patch.review = null
     }
     const rec = update(db, 'cases', c.id, patch)
     return ok(rec)
@@ -250,8 +309,13 @@ export function buildRoutes(db) {
   post(/^\/api\/cases\/ai-generate$/, (q, m, body) => {
     const hostXml = body?.hostXml
     if (!hostXml) return err(4000, '缺少 hostXml')
-    const newInput = aiGenerate(hostXml, { urlTemplate: db.config.urlTemplate, defaultHeaders: db.config.defaultHeaders })
-    return ok({ newInput })
+    const env = (db.config.environments || []).find((e) => e.current) || null
+    const newInput = aiGenerate(hostXml, {
+      urlTemplate: db.config.urlTemplate,
+      defaultHeaders: db.config.defaultHeaders,
+      envBaseUrl: env ? env.baseUrl : '',
+    })
+    return ok({ newInput, envId: env?.id || null })
   })
 
   /* ---------- 執行 ---------- */
@@ -272,7 +336,7 @@ export function buildRoutes(db) {
         id: r.id,
         type: r.type,
         verdict: r.verdict,
-        summary: r.diff.summary,
+        summary: r.diff ? r.diff.summary : null,
         runBy: r.runBy,
         startedAt: r.startedAt,
         finishedAt: r.finishedAt,
@@ -329,7 +393,8 @@ export function buildRoutes(db) {
       concurrency: Math.max(1, Number(concurrency) || 10),
       durationSec: Math.max(5, Number(durationSec) || 60),
       rampUpSec: Math.min(Math.max(1, Number(rampUpSec) || 10), Math.max(5, Number(durationSec) || 60)),
-      status: 'idle',
+      status: 'pending', // 新建計劃需審批通過後才可執行
+      review: null,
       runCount: 0,
       createdBy: db.meta.currentUser.name,
       createdAt: now(),
@@ -362,8 +427,25 @@ export function buildRoutes(db) {
     const p = find(db, 'stressPlans', m[1])
     if (!p) return err(4040, '計劃不存在')
     if (p.status === 'running') return err(4000, '該計劃正在運行中')
+    if (p.status !== 'approved' && p.status !== 'done') {
+      return err(4030, p.status === 'pending' ? '計劃尚未審批通過，需先由審批人批准後才可執行' : '計劃已被駁回，無法執行')
+    }
     startStress(db, p)
     return ok({ id: p.id, status: 'running' })
+  })
+
+  /* 壓測計劃審批（演示雙角色：審批人操作） */
+  post(/^\/api\/stress\/plans\/([A-Za-z0-9]+)\/review$/, (q, m, body) => {
+    const p = find(db, 'stressPlans', m[1])
+    if (!p) return err(4040, '計劃不存在')
+    const action = body?.action
+    if (action !== 'approve' && action !== 'reject') return err(4000, 'action 必須為 approve 或 reject')
+    if (p.status === 'running') return err(4000, '運行中的計劃不能審批')
+    update(db, 'stressPlans', p.id, {
+      status: action === 'approve' ? 'approved' : 'rejected',
+      review: { reviewer: db.meta.currentUser.name, comment: body?.comment || '', at: now() },
+    })
+    return ok(find(db, 'stressPlans', p.id))
   })
 
   get(/^\/api\/stress\/runs\/([A-Za-z0-9]+)$/, (q, m) => {
@@ -379,6 +461,12 @@ export function buildRoutes(db) {
     if (body?.urlTemplate) patch.urlTemplate = body.urlTemplate
     if (body?.defaultHeaders) patch.defaultHeaders = body.defaultHeaders
     if (body?.diffRules) patch.diffRules = { ...db.config.diffRules, ...body.diffRules }
+    if (body?.environments) {
+      // 環境整值替換：保證恰有一個 current
+      const envs = body.environments.filter((e) => e && e.id)
+      const current = envs.some((e) => e.current) ? envs.map((e) => ({ ...e, current: e.current === true })) : [{ ...envs[0], current: true }, ...envs.slice(1).map((e) => ({ ...e, current: false }))]
+      patch.environments = current.map((e) => ({ id: e.id, name: e.name || e.id, baseUrl: e.baseUrl || '', current: e.current === true }))
+    }
     Object.assign(db.config, patch)
     return ok(db.config)
   })

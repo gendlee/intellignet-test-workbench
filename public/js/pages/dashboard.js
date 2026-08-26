@@ -14,17 +14,19 @@ async function init() {
   rootEl = document.getElementById('page')
   rootEl.innerHTML = ''
   try {
-    const [summary, recent, pending, chartStatus, chartModule, chartTrend] = await Promise.all([
+    const [summary, recent, pending, chartStatus, chartModule, chartTrend, moduleCards] = await Promise.all([
       get('/api/dashboard/summary'),
       get('/api/dashboard/recent-runs', { limit: 10 }),
       get('/api/dashboard/pending-reviews', { limit: 8 }),
       get('/api/dashboard/charts', { type: 'status-distribution' }),
       get('/api/dashboard/charts', { type: 'module-distribution' }),
       get('/api/dashboard/charts', { type: 'execution-trend' }),
+      get('/api/dashboard/charts', { type: 'module-cards' }),
     ])
 
     rootEl.append(renderBatchBanner(summary.runningBatch))
     rootEl.append(renderKpis(summary))
+    rootEl.append(renderModuleCards(moduleCards))
     const grid = el('div', { class: 'dash-grid', style: 'margin-top:16px' })
     const col1 = el('div', { class: 'col' })
     const col2 = el('div', { class: 'col' })
@@ -82,6 +84,40 @@ function renderKpis(s) {
     kpi('通過率', `${s.passRate}%`, s.passRate >= 80 ? 'ok' : s.passRate >= 50 ? 'warn' : 'danger', 'PASS / 總執行'),
     kpi('待審核案例', s.pendingReviews, s.pendingReviews ? 'warn' : 'ok', s.pendingReviews ? '需要人工確認' : '全部已審核'),
   ])
+}
+
+/** 按業務模塊卡片網格（需求 1）：點擊跳轉案例列表並預篩模塊 */
+function renderModuleCards(cards) {
+  const card = el('div', { class: 'card', style: 'margin-top:16px' }, [
+    el('div', { class: 'card-head' }, [
+      el('h2', { text: '按業務模塊' }),
+      el('span', { class: 'sub', text: '各模塊案例數 / 執行數 / 通過率 / 最近判定，點擊卡片篩選該模塊案例' }),
+    ]),
+    el('div', { class: 'card-body' }, [
+      el('div', { class: 'mod-grid' }, (cards || []).length
+        ? cards.map((m) => el('a', { class: 'mod-card', href: `/cases.html?module=${encodeURIComponent(m.module)}` }, [
+            el('div', { class: 'mod-head' }, [
+              el('span', { class: 'mod-name', text: m.module }),
+              el('span', { class: 'mod-count', text: `${m.caseCount} 案例` }),
+            ]),
+            el('div', { class: 'mod-row' }, [
+              el('span', { text: `執行 ${m.runCount} 次` }),
+              el('span', { text: `通過率 ${m.passRate}%` }),
+            ]),
+            el('div', { class: 'mod-bar' }, [
+              el('div', { class: 'mod-bar-fill', style: `width:${Math.max(0, Math.min(100, m.passRate))}%` }),
+            ]),
+            el('div', { class: 'mod-foot' }, [
+              m.lastVerdict ? el('span', { innerHTML: verdictBadge(m.lastVerdict) }) : el('span', { class: 'muted', text: '未執行' }),
+              el('span', { class: 'muted', text: m.lastRunAt ? fmtAgo(m.lastRunAt) : '' }),
+              el('span', { class: 'spacer' }),
+              el('span', { class: 'mod-arrow', text: '→' }),
+            ]),
+          ]))
+        : el('div', { class: 'empty', text: '暫無模塊數據' })),
+    ]),
+  ])
+  return card
 }
 
 function renderCharts(charts) {

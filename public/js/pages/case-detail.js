@@ -20,13 +20,21 @@ const state = {
   histPage: 1,
   hist: [],
   histTotal: 0,
+  env: null, // 當前環境 { name, baseUrl }
+}
+
+/** 載入當前環境（配置信息卡展示） */
+async function loadConfig() {
+  try {
+    const cfg = await get('/api/config')
+    state.env = cfg.environments?.find((e) => e.current) || null
+  } catch { /* 環境資訊缺失不阻塞頁面 */ }
 }
 
 let rootEl
 
 async function loadCase() {
   state.c = await get(`/api/cases/${caseId}`)
-  render()
 }
 
 function render() {
@@ -62,19 +70,22 @@ function render() {
     ]))
   }
 
+  // 配置信息卡（需求 10：展示該案例調用的接口 URL / 環境 / 請求定義）
+  rootEl.append(configCard(c))
+
   // Tab 結構
   const tabs = el('div', { class: 'tabs' }, [
-    tabBtn('本次結果', 'tab-result'),
-    tabBtn('運行歷史', 'tab-hist'),
-    tabBtn('審核記錄', 'tab-audit'),
+    tabBtn('本次結果', 'result'),
+    tabBtn('運行歷史', 'hist'),
+    tabBtn('審核記錄', 'audit'),
   ])
   const panels = {
-    'tab-result': el('div', { class: 'tab-panel', id: 'panel-result' }),
-    'tab-hist': el('div', { class: 'tab-panel', id: 'panel-hist' }),
-    'tab-audit': el('div', { class: 'tab-panel', id: 'panel-audit' }),
+    result: el('div', { class: 'tab-panel', id: 'panel-result' }),
+    hist: el('div', { class: 'tab-panel', id: 'panel-hist' }),
+    audit: el('div', { class: 'tab-panel', id: 'panel-audit' }),
   }
-  rootEl.append(tabs, panels['tab-result'], panels['tab-hist'], panels['tab-audit'])
-  switchTab('tab-result')
+  rootEl.append(tabs, panels.result, panels.hist, panels.audit)
+  switchTab('result')
 
   renderResultPanel()
   loadHist()
@@ -87,6 +98,85 @@ function tabBtn(label, key) {
 function switchTab(key) {
   for (const b of document.querySelectorAll('.tabs .tab')) b.classList.toggle('active', b.id === `tab-${key}`)
   for (const p of document.querySelectorAll('.tab-panel')) p.classList.toggle('active', p.id === `panel-${key}`)
+}
+
+/* ---------- 配置信息卡（需求 10） ---------- */
+
+function configCard(c) {
+  const env = state.env
+  const ni = c.newInput
+  const rows = []
+  rows.push(el('div', { class: 'cfg-row' }, [
+    el('span', { class: 'cfg-label', text: '案例模式' }),
+    el('span', { class: `badge ${c.mode === 'http' ? 'badge-info' : 'badge-warn'}`, text: c.mode === 'http' ? '獨立 HTTP 模式' : '對比模式（主機 vs 新系統）' }),
+    el('span', { class: 'badge badge-neutral', text: `主機格式 ${c.hostFormat || 'XML'}` }),
+    el('span', { class: 'badge badge-neutral', text: '請求格式 JSON' }),
+  ]))
+  if (env) {
+    rows.push(el('div', { class: 'cfg-row' }, [
+      el('span', { class: 'cfg-label', text: '當前環境' }),
+      el('span', { class: 'badge badge-info', text: env.name }),
+      el('code', { class: 'cfg-code', text: env.baseUrl }),
+    ]))
+  }
+  if (ni) {
+    rows.push(el('div', { class: 'cfg-row' }, [
+      el('span', { class: 'cfg-label', text: '接口 URL' }),
+      el('span', { class: 'badge badge-neutral', style: 'min-width:60px;text-align:center', text: ni.method || 'POST' }),
+      el('code', { class: 'cfg-code', style: 'flex:1', text: ni.url || '—' }),
+      el('button', { class: 'btn btn-sm', text: '複製', onclick: () => { navigator.clipboard?.writeText(ni.url || ''); toast('已複製 URL', 'ok') } }),
+    ]))
+    const headers = ni.headers || []
+    if (headers.length) {
+      rows.push(el('div', { class: 'cfg-row' }, [
+        el('span', { class: 'cfg-label', text: '請求頭' }),
+        el('div', { class: 'cfg-kv' }, headers.map((h) => el('code', { class: 'cfg-code', text: `${h.name}: ${h.value}` }))),
+      ]))
+    }
+    if (ni.body) {
+      rows.push(el('div', { class: 'cfg-row' }, [
+        el('span', { class: 'cfg-label', text: '請求體' }),
+        el('details', { class: 'cfg-fold', style: 'flex:1' }, [
+          el('summary', { text: `查看請求體（${ni.body.length} 字元）` }),
+          el('pre', { class: 'cfg-pre', text: ni.body }),
+        ]),
+      ]))
+    }
+  }
+  if (c.hostInput?.rawXml && c.mode !== 'http') {
+    rows.push(el('div', { class: 'cfg-row' }, [
+      el('span', { class: 'cfg-label', text: '主機報文' }),
+      el('details', { class: 'cfg-fold', style: 'flex:1' }, [
+        el('summary', { text: `查看主機報文（${c.hostInput.rawXml.length} 字元）` }),
+        el('pre', { class: 'cfg-pre', text: c.hostInput.rawXml }),
+      ]),
+    ]))
+  }
+  return el('div', { class: 'card', style: 'margin-bottom:16px' }, [
+    el('div', { class: 'card-head' }, [
+      el('h2', { text: '配置信息' }),
+      el('span', { class: 'sub', text: '該案例執行的接口定義與調用目標' }),
+    ]),
+    el('div', { class: 'card-body' }, rows),
+  ])
+}
+
+/* ---------- 執行過程步驟時間線（需求 2） ---------- */
+
+function renderSteps(steps) {
+  const tl = el('div', { class: 'timeline' })
+  for (const s of steps || []) {
+    const cls = s.status === 'ok' ? 'ok' : s.status === 'warn' ? 'warn' : 'danger'
+    tl.append(el('div', { class: 'tl-item' }, [
+      el('div', { class: `tl-dot ${cls}` }),
+      el('div', { class: 'tl-body' }, [
+        el('div', { class: 'tl-title', text: s.name }),
+        el('div', { class: 'tl-sub', text: s.detail || '' }),
+      ]),
+      el('div', { class: 'tl-time', text: s.ms != null ? `${s.ms} ms` : '' }),
+    ]))
+  }
+  return tl
 }
 
 /* ---------- 本次結果 ---------- */
@@ -103,17 +193,56 @@ function renderResultPanel() {
     return
   }
   if (run.diff) {
+    // 對比模式：結果總覽 + 執行過程 + diff 細節
     panel.append(el('div', { class: 'card', style: 'padding:18px' }, [
-      el('div', { class: 'meta-grid', style: 'margin-bottom:16px' }, [
+      el('div', { class: 'flex', style: 'margin-bottom:14px;gap:10px' }, [
+        el('span', { innerHTML: verdictBadge(run.verdict) }),
+        el('span', { class: 'rs-title', text: run.verdict === 'PASS' ? '兩側報文一致，執行通過' : run.verdict === 'DIFF' ? '存在差異，請查看字段比對' : '存在高可疑差異，執行失敗' }),
+      ]),
+      el('div', { class: 'meta-grid' }, [
         mg('執行時間', fmtTime(run.startedAt, true)),
         mg('執行人', run.runBy),
         mg('執行類型', run.type === 'BATCH' ? '批量回歸' : '單條執行'),
-        mg('主機延時', run.hostResult ? `${run.hostResult.latencyMs} ms` : '—'),
-        mg('新系統延時', run.newResult ? `${run.newResult.latencyMs} ms` : '—'),
+        mg('主機狀態', run.hostResult ? `HTTP ${run.hostResult.httpStatus} · ${run.hostResult.latencyMs} ms` : '—'),
+        mg('新系統狀態', run.newResult ? `HTTP ${run.newResult.httpStatus} · ${run.newResult.latencyMs} ms` : '—'),
         mg('接口類型', stateTypeLabel[run.diff.stateType] || run.diff.stateType),
       ]),
     ]))
+    if (run.steps?.length) {
+      panel.append(el('div', { class: 'card', style: 'padding:18px;margin-top:14px' }, [
+        el('div', { class: 'card-head', style: 'padding:0 0 10px' }, [el('h2', { text: '執行過程' })]),
+        renderSteps(run.steps),
+      ]))
+    }
     panel.append(renderRunResult(run))
+  } else if (run.newResult || run.steps) {
+    // 獨立 HTTP 模式：判定雙欄 + 執行過程 + 響應報文
+    panel.append(el('div', { class: 'card', style: 'padding:18px' }, [
+      el('div', { class: 'flex', style: 'margin-bottom:14px;gap:10px' }, [
+        el('span', { innerHTML: verdictBadge(run.verdict) }),
+        el('span', { class: 'rs-title', text: run.verdict === 'PASS' ? 'HTTP 2xx，執行通過' : `HTTP 非 2xx，執行失敗` }),
+      ]),
+      el('div', { class: 'meta-grid' }, [
+        mg('執行時間', fmtTime(run.startedAt, true)),
+        mg('執行人', run.runBy),
+        mg('執行類型', run.type === 'BATCH' ? '批量回歸' : '單條執行'),
+        mg('HTTP 狀態', run.newResult ? `HTTP ${run.newResult.httpStatus}` : run.httpStatus != null ? `HTTP ${run.httpStatus}` : '—'),
+        mg('總耗時', run.newResult ? `${run.newResult.latencyMs} ms` : '—'),
+        mg('響應大小', run.newResult?.rawBody ? `${String(run.newResult.rawBody).length} 字元` : '—'),
+      ]),
+    ]))
+    if (run.steps?.length) {
+      panel.append(el('div', { class: 'card', style: 'padding:18px;margin-top:14px' }, [
+        el('div', { class: 'card-head', style: 'padding:0 0 10px' }, [el('h2', { text: '執行過程' })]),
+        renderSteps(run.steps),
+      ]))
+    }
+    if (run.newResult?.rawBody != null) {
+      panel.append(el('div', { class: 'card', style: 'padding:18px;margin-top:14px' }, [
+        el('div', { class: 'card-head', style: 'padding:0 0 10px' }, [el('h2', { text: '響應報文' })]),
+        el('pre', { class: 'cfg-pre', style: 'margin:0', text: run.newResult.rawBody }),
+      ]))
+    }
   } else {
     // 老記錄只有摘要（列表回填場景不會發生，保留相容）
     panel.append(el('div', { class: 'empty', text: '此運行記錄不含完整比對數據' }))
@@ -288,6 +417,8 @@ async function init() {
   }
   try {
     await loadCase()
+    await loadConfig()
+    render()
   } catch (e) {
     rootEl.innerHTML = `<div class="empty">載入失敗：${esc(e.message)}</div>`
   }
